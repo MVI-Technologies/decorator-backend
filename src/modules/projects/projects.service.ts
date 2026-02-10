@@ -1,0 +1,333 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { AssignProfessionalDto, RequestRevisionDto } from './dto';
+import { ConfigService } from '@nestjs/config';
+
+/**
+ * Service de Projetos.
+ * Gerencia o ciclo completo do projeto do ponto de vista do cliente:
+ * listagem, matching, contratação, acompanhamento, aprovação e revisões.
+ */
+@Injectable()
+export class ProjectsService {
+  private readonly logger = new Logger(ProjectsService.name);
+  private readonly platformFeeRate: number;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.platformFeeRate = parseFloat(
+      this.configService.get<string>('ESCROW_COMMISSION_RATE', '0.15'),
+    );
+  }
+
+  /**
+   * Lista todos os projetos do cliente com paginação.
+   */
+  async findAllByClient(clientId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [projects, total] = await Promise.all([
+      this.prisma.project.findMany({
+        where: { clientId },
+        include: {
+          briefing: true,
+          professionalProfile: {
+            include: { user: { select: { name: true, avatarUrl: true } } },
+          },
+          payment: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.project.count({ where: { clientId } }),
+    ]);
+
+    return {
+      data: projects,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Detalhes de um projeto com todas as relações.
+   */
+  async findOne(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        briefing: true,
+        professionalProfile: {
+          include: {
+            user: { select: { name: true, avatarUrl: true, email: true } },
+            styles: true,
+          },
+        },
+        payment: true,
+        review: true,
+        files: { orderBy: { createdAt: 'desc' } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    // Verificar acesso
+    const isClient = project.clientId === userId;
+    const isProfessional = project.professionalProfile?.userId === userId;
+
+    if (!isClient && !isProfessional) {
+      throw new ForbiddenException('Sem permissão para acessar este projeto');
+    }
+
+    return project;
+  }
+
+  /**
+   * Busca profissionais compatíveis com os estilos do briefing.
+   */
+  async matchProfessionals(projectId: string, clientId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { briefing: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (project.clientId !== clientId) {
+      throw new ForbiddenException('Sem permissão');
+    }
+
+    const stylePreferences = project.briefing?.stylePreferences || [];
+
+    // Buscar profissionais aprovados, com match por estilo
+    const professionals = await this.prisma.professionalProfile.findMany({
+      where: {
+        status: 'APPROVED',
+        ...(stylePreferences.length > 0 && {
+          styles: {
+            some: {
+              name: { in: stylePreferences, mode: 'insensitive' },
+            },
+          },
+        }),
+      },
+      include: {
+        user: { select: { name: true, avatarUrl: true } },
+        styles: true,
+        portfolioItems: {
+          take: 4,
+          orderBy: { order: 'asc' },
+        },
+      },
+      orderBy: [
+        { averageRating: 'desc' },
+        { completedProjects: 'desc' },
+      ],
+    });
+
+    return professionals;
+  }
+
+  /**
+   * Atribui um profissional ao projeto e cria o pagamento (escrow).
+   */
+  async assignProfessional(projectId: string, clientId: string, dto: AssignProfessionalDto) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (project.clientId !== clientId) {
+      throw new ForbiddenException('Sem permissão');
+    }
+
+    if (project.professionalProfileId) {
+      throw new BadRequestException('Este projeto já possui um profissional atribuído');
+    }
+
+    // Verificar se o profissional existe e está aprovado
+    const professional = await this.prisma.professionalProfile.findUnique({
+      where: { id: dto.professionalProfileId },
+    });
+
+    if (!professional || professional.status !== 'APPROVED') {
+      throw new BadRequestException('Profissional não encontrado ou não aprovado');
+    }
+
+    // Calcular taxas
+    const platformFee = Math.round(dto.price * this.platformFeeRate * 100) / 100;
+    const professionalAmount = Math.round((dto.price - platformFee) * 100) / 100;
+
+    // Transação: atualizar projeto + criar payment
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedProject = await tx.project.update({
+        where: { id: projectId },
+        data: {
+          professionalProfileId: dto.professionalProfileId,
+          packageType: dto.packageType,
+          price: dto.price,
+          status: 'PROFESSIONAL_ASSIGNED',
+        },
+      });
+
+      const payment = await tx.payment.create({
+        data: {
+          projectId,
+          amount: dto.price,
+          platformFee,
+          professionalAmount,
+          status: 'IN_ESCROW',
+          escrowStartedAt: new Date(),
+        },
+      });
+
+      return { project: updatedProject, payment };
+    });
+
+    this.logger.log(
+      `Profissional ${dto.professionalProfileId} atribuído ao projeto ${projectId}. ` +
+      `Valor: R$${dto.price} | Taxa: R$${result.payment.platformFee} | ` +
+      `Profissional: R$${result.payment.professionalAmount}`,
+    );
+
+    return result;
+  }
+
+  /**
+   * Aprova a entrega do projeto e libera o escrow.
+   */
+  async approveDelivery(projectId: string, clientId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { payment: true, professionalProfile: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (project.clientId !== clientId) {
+      throw new ForbiddenException('Sem permissão');
+    }
+
+    if (project.status !== 'DELIVERED') {
+      throw new BadRequestException(
+        'Só é possível aprovar projetos com status DELIVERED',
+      );
+    }
+
+    // Transação: atualizar projeto + payment + métricas do profissional
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedProject = await tx.project.update({
+        where: { id: projectId },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+        },
+      });
+
+      let updatedPayment = null;
+      if (project.payment) {
+        updatedPayment = await tx.payment.update({
+          where: { id: project.payment.id },
+          data: {
+            status: 'RELEASED',
+            releasedAt: new Date(),
+          },
+        });
+      }
+
+      // Incrementar contador de projetos do profissional
+      if (project.professionalProfileId) {
+        await tx.professionalProfile.update({
+          where: { id: project.professionalProfileId },
+          data: {
+            completedProjects: { increment: 1 },
+          },
+        });
+      }
+
+      return { project: updatedProject, payment: updatedPayment };
+    });
+
+    this.logger.log(`Projeto ${projectId} aprovado. Escrow liberado.`);
+    return result;
+  }
+
+  /**
+   * Solicita revisão de um projeto entregue.
+   */
+  async requestRevision(projectId: string, clientId: string, dto: RequestRevisionDto) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (project.clientId !== clientId) {
+      throw new ForbiddenException('Sem permissão');
+    }
+
+    if (project.status !== 'DELIVERED') {
+      throw new BadRequestException('Só é possível solicitar revisão de projetos entregues');
+    }
+
+    if (project.revisionsUsed >= project.maxRevisions) {
+      throw new BadRequestException(
+        `Limite de revisões atingido (${project.maxRevisions}/${project.maxRevisions})`,
+      );
+    }
+
+    const updatedProject = await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        status: 'REVISION_REQUESTED',
+        revisionsUsed: { increment: 1 },
+      },
+    });
+
+    // Se há comentário, criar mensagem no chat
+    if (dto.comment) {
+      await this.prisma.message.create({
+        data: {
+          projectId,
+          senderId: clientId,
+          content: `📝 Revisão solicitada: ${dto.comment}`,
+        },
+      });
+    }
+
+    this.logger.log(
+      `Revisão solicitada para projeto ${projectId} ` +
+      `(${updatedProject.revisionsUsed}/${updatedProject.maxRevisions})`,
+    );
+
+    return updatedProject;
+  }
+}

@@ -1,0 +1,125 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateBriefingDto, UpdateBriefingDto } from './dto';
+
+/**
+ * Service de Briefings.
+ * Gerencia a criação e edição de briefings vinculados a projetos.
+ */
+@Injectable()
+export class BriefingsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Cria um novo projeto + briefing em uma transação atômica.
+   */
+  async create(clientId: string, dto: CreateBriefingDto) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Criar o projeto
+      const project = await tx.project.create({
+        data: {
+          clientId,
+          title: dto.projectTitle,
+        },
+      });
+
+      // 2. Criar o briefing vinculado
+      const briefing = await tx.briefing.create({
+        data: {
+          projectId: project.id,
+          roomType: dto.roomType,
+          roomSize: dto.roomSize,
+          budget: dto.budget,
+          description: dto.description,
+          stylePreferences: dto.stylePreferences || [],
+          referenceImages: dto.referenceImages || [],
+          requirements: dto.requirements,
+          deadline: dto.deadline ? new Date(dto.deadline) : null,
+        },
+      });
+
+      return {
+        project,
+        briefing,
+      };
+    });
+  }
+
+  /**
+   * Atualiza um briefing existente.
+   * Apenas o cliente dono do projeto pode editar.
+   */
+  async update(briefingId: string, clientId: string, dto: UpdateBriefingDto) {
+    const briefing = await this.prisma.briefing.findUnique({
+      where: { id: briefingId },
+      include: { project: true },
+    });
+
+    if (!briefing) {
+      throw new NotFoundException('Briefing não encontrado');
+    }
+
+    if (briefing.project.clientId !== clientId) {
+      throw new ForbiddenException('Você não tem permissão para editar este briefing');
+    }
+
+    // Só pode editar se o projeto ainda está em fase de briefing ou matching
+    const editableStatuses = ['BRIEFING_SUBMITTED', 'MATCHING'];
+    if (!editableStatuses.includes(briefing.project.status)) {
+      throw new BadRequestException(
+        'O briefing só pode ser editado enquanto o projeto está em fase de briefing ou matching',
+      );
+    }
+
+    return this.prisma.briefing.update({
+      where: { id: briefingId },
+      data: {
+        ...(dto.roomType !== undefined && { roomType: dto.roomType }),
+        ...(dto.roomSize !== undefined && { roomSize: dto.roomSize }),
+        ...(dto.budget !== undefined && { budget: dto.budget }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.stylePreferences !== undefined && { stylePreferences: dto.stylePreferences }),
+        ...(dto.referenceImages !== undefined && { referenceImages: dto.referenceImages }),
+        ...(dto.requirements !== undefined && { requirements: dto.requirements }),
+        ...(dto.deadline !== undefined && { deadline: dto.deadline ? new Date(dto.deadline) : null }),
+      },
+    });
+  }
+
+  /**
+   * Busca um briefing por ID.
+   */
+  async findOne(briefingId: string, userId: string) {
+    const briefing = await this.prisma.briefing.findUnique({
+      where: { id: briefingId },
+      include: {
+        project: {
+          include: {
+            professionalProfile: {
+              include: { user: { select: { name: true, avatarUrl: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!briefing) {
+      throw new NotFoundException('Briefing não encontrado');
+    }
+
+    // Verificar acesso: cliente dono ou profissional atribuído
+    const isOwner = briefing.project.clientId === userId;
+    const isProfessional = briefing.project.professionalProfile?.userId === userId;
+
+    if (!isOwner && !isProfessional) {
+      throw new ForbiddenException('Sem permissão para visualizar este briefing');
+    }
+
+    return briefing;
+  }
+}
