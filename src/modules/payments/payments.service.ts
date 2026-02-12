@@ -2,10 +2,14 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestWithdrawalDto } from './dto';
+
+const CONFIG_ADMIN_PIX_KEY = 'ADMIN_PIX_KEY';
+const CONFIG_ADMIN_PIX_KEY_TYPE = 'ADMIN_PIX_KEY_TYPE';
 
 /**
  * Service de Pagamentos e Saques.
@@ -104,6 +108,53 @@ export class PaymentsService {
     );
 
     return withdrawal;
+  }
+
+  /**
+   * Dados PIX para o cliente gerar o QR code de pagamento (MVP).
+   * Apenas para o cliente dono do projeto; pagamento deve estar PENDING.
+   * O valor cai na chave PIX do admin; em até 4 dias úteis o admin repassa ao profissional.
+   */
+  async getPixInfoForProject(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { payment: true, client: true },
+    });
+    if (!project) throw new NotFoundException('Projeto não encontrado');
+    if (project.clientId !== userId) {
+      throw new ForbiddenException('Sem permissão para acessar este pagamento');
+    }
+    if (!project.payment) throw new NotFoundException('Pagamento não encontrado');
+    if (project.payment.status !== 'PENDING') {
+      throw new BadRequestException(
+        'Este pagamento não está aguardando pagamento PIX (status: ' +
+          project.payment.status +
+          ')',
+      );
+    }
+    const [pixKeyConfig, pixKeyTypeConfig] = await Promise.all([
+      this.prisma.systemConfig.findUnique({
+        where: { key: CONFIG_ADMIN_PIX_KEY },
+      }),
+      this.prisma.systemConfig.findUnique({
+        where: { key: CONFIG_ADMIN_PIX_KEY_TYPE },
+      }),
+    ]);
+    const pixKey = pixKeyConfig?.value;
+    const pixKeyType = pixKeyTypeConfig?.value ?? 'RANDOM';
+    if (!pixKey) {
+      throw new BadRequestException(
+        'Chave PIX do sistema ainda não foi configurada pelo admin. Entre em contato.',
+      );
+    }
+    return {
+      pixKey,
+      pixKeyType,
+      amount: project.payment.amount,
+      description: `Decorador.net - Projeto ${project.title}`,
+      projectId: project.id,
+      paymentId: project.payment.id,
+    };
   }
 
   /**

@@ -194,14 +194,14 @@ export class ProjectsService {
         },
       });
 
+      // MVP: pagamento inicia PENDING — cliente paga via PIX (QR) para o admin; admin marca "recebido" → IN_ESCROW; em até 4 dias admin paga o profissional e marca → RELEASED
       const payment = await tx.payment.create({
         data: {
           projectId,
           amount: dto.price,
           platformFee,
           professionalAmount,
-          status: 'IN_ESCROW',
-          escrowStartedAt: new Date(),
+          status: 'PENDING',
         },
       });
 
@@ -240,7 +240,7 @@ export class ProjectsService {
       );
     }
 
-    // Transação: atualizar projeto + payment + métricas do profissional
+    // MVP: aprovar entrega só marca projeto como COMPLETED; o pagamento ao profissional é feito pelo admin em até 4 dias úteis (mark-paid-to-professional).
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedProject = await tx.project.update({
         where: { id: projectId },
@@ -250,31 +250,17 @@ export class ProjectsService {
         },
       });
 
-      let updatedPayment = null;
-      if (project.payment) {
-        updatedPayment = await tx.payment.update({
-          where: { id: project.payment.id },
-          data: {
-            status: 'RELEASED',
-            releasedAt: new Date(),
-          },
-        });
-      }
-
-      // Incrementar contador de projetos do profissional
       if (project.professionalProfileId) {
         await tx.professionalProfile.update({
           where: { id: project.professionalProfileId },
-          data: {
-            completedProjects: { increment: 1 },
-          },
+          data: { completedProjects: { increment: 1 } },
         });
       }
 
-      return { project: updatedProject, payment: updatedPayment };
+      return { project: updatedProject, payment: project.payment };
     });
 
-    this.logger.log(`Projeto ${projectId} aprovado. Escrow liberado.`);
+    this.logger.log(`Projeto ${projectId} aprovado pelo cliente.`);
     return result;
   }
 

@@ -432,3 +432,19 @@ model Notification {
   @@map("notifications")
 }
 
+// ============================================
+// MODELO 14 — SystemConfig (configurações do sistema / admin)
+// ============================================
+
+/// Configurações gerais do sistema (ex: chave PIX do admin para receber pagamentos MVP).
+model SystemConfig {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+

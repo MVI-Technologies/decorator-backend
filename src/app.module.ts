@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { join } from 'path';
 
 // Configurações
 import { appConfig, supabaseConfig, jwtConfig } from './config';
@@ -13,8 +14,9 @@ import { PrismaModule } from './prisma/prisma.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
-// Health check
+// Health check e rotas na raiz (/ e /favicon.ico)
 import { HealthController } from './health.controller';
+import { RootController } from './root.controller';
 
 // Módulos da aplicação
 import { AuthModule } from './modules/auth/auth.module';
@@ -37,7 +39,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, supabaseConfig, jwtConfig],
-      envFilePath: '.env',
+      // Caminho absoluto para .env (evita P1001 quando cwd ≠ raiz do projeto)
+      envFilePath: join(__dirname, '..', '.env'),
     }),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60000, limit: 60 }],
@@ -55,7 +58,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     StorageModule,
     NotificationsModule,
   ],
-  controllers: [HealthController],
+  controllers: [RootController, HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },

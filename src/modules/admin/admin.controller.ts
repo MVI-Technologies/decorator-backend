@@ -1,7 +1,11 @@
 import { Controller, Get, Patch, Post, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
-import { UpdateProfessionalStatusDto, ProcessWithdrawalDto } from './dto';
+import {
+  UpdateProfessionalStatusDto,
+  ProcessWithdrawalDto,
+  UpdateAdminPixDto,
+} from './dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
 
@@ -67,5 +71,45 @@ export class AdminController {
   @ApiOperation({ summary: 'Ativar/desativar usuário' })
   async toggleUserActive(@Param('id') id: string) {
     return this.adminService.toggleUserActive(id);
+  }
+
+  // ─── Chave PIX do admin (MVP: cliente paga via PIX para o admin) ───
+
+  @Get('settings/pix')
+  @ApiOperation({ summary: 'Obter chave PIX configurada do admin' })
+  async getAdminPixSettings() {
+    return this.adminService.getAdminPixSettings();
+  }
+
+  @Patch('settings/pix')
+  @ApiOperation({ summary: 'Configurar chave PIX do admin para receber pagamentos' })
+  async updateAdminPixSettings(@Body() dto: UpdateAdminPixDto) {
+    return this.adminService.updateAdminPixSettings(dto);
+  }
+
+  // ─── Pagamentos MVP (recebimento e repasse ao profissional) ───
+
+  @Get('payments/pending-received')
+  @ApiOperation({ summary: 'Pagamentos aguardando confirmação de recebimento (PIX do cliente)' })
+  async getPaymentsPendingReceived() {
+    return this.adminService.getPaymentsPendingReceived();
+  }
+
+  @Patch('payments/:id/mark-received')
+  @ApiOperation({ summary: 'Marcar que o admin recebeu o PIX do cliente' })
+  async markPaymentReceived(@Param('id') id: string) {
+    return this.adminService.markPaymentReceived(id);
+  }
+
+  @Get('payments/pending-transfer')
+  @ApiOperation({ summary: 'Pagamentos recebidos que ainda não foram repassados ao profissional (4 dias úteis)' })
+  async getPaymentsPendingTransferToProfessional() {
+    return this.adminService.getPaymentsPendingTransferToProfessional();
+  }
+
+  @Patch('payments/:id/mark-paid-to-professional')
+  @ApiOperation({ summary: 'Marcar que o admin já repassou o valor ao profissional' })
+  async markPaymentPaidToProfessional(@Param('id') id: string) {
+    return this.adminService.markPaymentPaidToProfessional(id);
   }
 }

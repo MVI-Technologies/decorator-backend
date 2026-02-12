@@ -131,7 +131,27 @@ export class AuthService {
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
 
-      this.logger.error(`Erro no signin: ${(error as Error).message}`);
+      const err = error as Error & { cause?: { code?: string } };
+      const message = err.message ?? '';
+      this.logger.error(`Erro no signin: ${message}`);
+
+      // Supabase exige confirmação de email por padrão
+      if (message?.toLowerCase().includes('email not confirmed')) {
+        throw new UnauthorizedException(
+          'Confirme seu email antes de fazer login. Verifique a caixa de entrada e o spam.',
+        );
+      }
+
+      // Timeout ou falha de rede ao falar com o Supabase
+      if (
+        message?.toLowerCase().includes('fetch failed') ||
+        err.cause?.code === 'UND_ERR_CONNECT_TIMEOUT'
+      ) {
+        throw new UnauthorizedException(
+          'Não foi possível conectar ao servidor de autenticação. Verifique sua internet e tente novamente.',
+        );
+      }
+
       throw new UnauthorizedException('Credenciais inválidas');
     }
   }

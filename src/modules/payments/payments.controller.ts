@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { RequestWithdrawalDto } from './dto';
@@ -15,6 +15,20 @@ import { AuthenticatedUser } from '../../common/interfaces/auth.interface';
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
+
+  /**
+   * GET /api/v1/payments/project/:projectId/pix-info — Dados PIX para o cliente gerar QR code (MVP).
+   * Cliente paga via PIX para a chave do admin; em até 4 dias úteis o admin repassa ao profissional.
+   */
+  @Get('project/:projectId/pix-info')
+  @Roles(Role.CLIENT)
+  @ApiOperation({ summary: 'Dados para gerar QR code PIX do pagamento do projeto' })
+  async getPixInfoForProject(
+    @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.paymentsService.getPixInfoForProject(projectId, user.id);
+  }
 
   /**
    * GET /api/v1/payments/balance — Saldo do profissional

@@ -1,3 +1,10 @@
+import { join } from 'path';
+import { config as loadEnv } from 'dotenv';
+
+// Carrega .env da raiz do projeto antes de qualquer módulo (evita P1001 quando cwd ≠ raiz)
+const rootDir = join(__dirname, '..');
+loadEnv({ path: join(rootDir, '.env') });
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -21,8 +28,8 @@ async function bootstrap() {
     'http://localhost:3000',
   ]);
 
-  // Prefixo global da API
-  app.setGlobalPrefix('api/v1');
+  // Prefixo global da API (exceto / e /favicon.ico para evitar 404 no log)
+  app.setGlobalPrefix('api/v1', { exclude: ['/', '/favicon.ico'] });
 
   // Segurança — Helmet (headers HTTP)
   app.use(helmet());

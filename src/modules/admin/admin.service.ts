@@ -1,6 +1,18 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UpdateProfessionalStatusDto, ProcessWithdrawalDto } from './dto';
+import {
+  UpdateProfessionalStatusDto,
+  ProcessWithdrawalDto,
+  UpdateAdminPixDto,
+} from './dto';
+
+const CONFIG_ADMIN_PIX_KEY = 'ADMIN_PIX_KEY';
+const CONFIG_ADMIN_PIX_KEY_TYPE = 'ADMIN_PIX_KEY_TYPE';
 
 /**
  * Service Admin.
@@ -169,5 +181,131 @@ export class AdminService {
       where: { id: userId },
       data: { isActive: !user.isActive },
     });
+  }
+
+  // ─── CHAVE PIX DO ADMIN (MVP) ────────────────────────────────────────
+
+  /**
+   * Retorna a chave PIX configurada do admin (para gerar QR code de pagamento).
+   */
+  async getAdminPixSettings() {
+    const [pixKey, pixKeyType] = await Promise.all([
+      this.prisma.systemConfig.findUnique({ where: { key: CONFIG_ADMIN_PIX_KEY } }),
+      this.prisma.systemConfig.findUnique({
+        where: { key: CONFIG_ADMIN_PIX_KEY_TYPE },
+      }),
+    ]);
+    return {
+      pixKey: pixKey?.value ?? null,
+      pixKeyType: pixKeyType?.value ?? null,
+    };
+  }
+
+  /**
+   * Atualiza a chave PIX do admin (recebimento de pagamentos do cliente via PIX).
+   */
+  async updateAdminPixSettings(dto: UpdateAdminPixDto) {
+    await this.prisma.$transaction([
+      this.prisma.systemConfig.upsert({
+        where: { key: CONFIG_ADMIN_PIX_KEY },
+        create: { key: CONFIG_ADMIN_PIX_KEY, value: dto.pixKey },
+        update: { value: dto.pixKey },
+      }),
+      this.prisma.systemConfig.upsert({
+        where: { key: CONFIG_ADMIN_PIX_KEY_TYPE },
+        create: { key: CONFIG_ADMIN_PIX_KEY_TYPE, value: dto.pixKeyType },
+        update: { value: dto.pixKeyType },
+      }),
+    ]);
+    this.logger.log('Chave PIX do admin atualizada');
+    return this.getAdminPixSettings();
+  }
+
+  // ─── PAGAMENTOS MVP (cliente paga PIX → admin recebe → em 4 dias paga profissional) ───
+
+  /**
+   * Lista pagamentos aguardando confirmação de recebimento (cliente já pagou via PIX; admin marca "recebido").
+   */
+  async getPaymentsPendingReceived() {
+    return this.prisma.payment.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        project: {
+          include: {
+            client: { select: { name: true, email: true } },
+            professionalProfile: {
+              include: { user: { select: { name: true } } },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Admin marca que recebeu o pagamento PIX do cliente (PENDING → IN_ESCROW).
+   */
+  async markPaymentReceived(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+    if (!payment) throw new NotFoundException('Pagamento não encontrado');
+    if (payment.status !== 'PENDING') {
+      throw new BadRequestException(
+        'Só é possível marcar recebimento em pagamentos com status PENDING',
+      );
+    }
+    return this.prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'IN_ESCROW',
+        escrowStartedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Lista pagamentos já recebidos pelo admin que ainda não foram repassados ao profissional (em até 4 dias úteis).
+   */
+  async getPaymentsPendingTransferToProfessional() {
+    return this.prisma.payment.findMany({
+      where: { status: 'IN_ESCROW' },
+      include: {
+        project: {
+          include: {
+            client: { select: { name: true } },
+            professionalProfile: {
+              include: {
+                user: { select: { name: true, email: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { escrowStartedAt: 'asc' },
+    });
+  }
+
+  /**
+   * Admin marca que já repassou o valor ao profissional (IN_ESCROW → RELEASED).
+   */
+  async markPaymentPaidToProfessional(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { project: true },
+    });
+    if (!payment) throw new NotFoundException('Pagamento não encontrado');
+    if (payment.status !== 'IN_ESCROW') {
+      throw new BadRequestException(
+        'Só é possível marcar como pago em pagamentos com status IN_ESCROW',
+      );
+    }
+    const updated = await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: { status: 'RELEASED', releasedAt: new Date() },
+    });
+    this.logger.log(`Pagamento ${paymentId} repassado ao profissional`);
+    return updated;
   }
 }
