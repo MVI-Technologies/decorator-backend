@@ -122,4 +122,37 @@ export class BriefingsService {
 
     return briefing;
   }
+
+  /**
+   * Remove um briefing e o projeto associado.
+   * Apenas o cliente dono pode excluir, e só enquanto o projeto está em BRIEFING_SUBMITTED ou MATCHING.
+   */
+  async remove(briefingId: string, clientId: string) {
+    const briefing = await this.prisma.briefing.findUnique({
+      where: { id: briefingId },
+      include: { project: true },
+    });
+
+    if (!briefing) {
+      throw new NotFoundException('Briefing não encontrado');
+    }
+
+    if (briefing.project.clientId !== clientId) {
+      throw new ForbiddenException('Você não tem permissão para excluir este briefing');
+    }
+
+    const deletableStatuses = ['BRIEFING_SUBMITTED', 'MATCHING'];
+    if (!deletableStatuses.includes(briefing.project.status)) {
+      throw new BadRequestException(
+        'O briefing só pode ser excluído enquanto o projeto está em fase de briefing ou matching',
+      );
+    }
+
+    // Deletar o projeto (cascade remove o briefing e demais dependências)
+    await this.prisma.project.delete({
+      where: { id: briefing.projectId },
+    });
+
+    return { message: 'Briefing e projeto excluídos com sucesso' };
+  }
 }

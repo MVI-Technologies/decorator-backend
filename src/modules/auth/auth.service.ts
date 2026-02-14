@@ -5,10 +5,12 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupabaseService } from './supabase.service';
 import { SignUpDto, SignInDto, ForgotPasswordDto } from './dto';
 import { Role } from '../../common/enums/role.enum';
+import { toAbsoluteAvatarUrl } from '../../common/utils/avatar-url.util';
 
 /**
  * Service de autenticação.
@@ -22,6 +24,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly supabaseService: SupabaseService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -191,8 +194,10 @@ export class AuthService {
       throw new UnauthorizedException('Usuário não encontrado');
     }
 
-    // Remover campos sensíveis
+    // Remover campos sensíveis e normalizar avatarUrl (relativa → absoluta)
     const { supabaseAuthId, ...safeUser } = user;
+    const baseUrl = this.configService.get<string>('APP_URL');
+    safeUser.avatarUrl = toAbsoluteAvatarUrl(safeUser.avatarUrl, baseUrl) ?? null;
     return safeUser;
   }
 }

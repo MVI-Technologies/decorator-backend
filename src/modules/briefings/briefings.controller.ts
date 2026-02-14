@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Patch, Get, Delete, Body, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BriefingsService } from './briefings.service';
 import { CreateBriefingDto, UpdateBriefingDto } from './dto';
@@ -54,5 +54,18 @@ export class BriefingsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.briefingsService.findOne(id, user.id);
+  }
+
+  /**
+   * DELETE /api/v1/briefings/:id — Excluir briefing e projeto
+   */
+  @Delete(':id')
+  @Roles(Role.CLIENT)
+  @ApiOperation({ summary: 'Excluir briefing (e projeto associado)' })
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.briefingsService.remove(id, user.id);
   }
 }
