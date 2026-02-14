@@ -118,9 +118,14 @@ export class ProjectsService {
       throw new ForbiddenException('Sem permissão');
     }
 
-    const stylePreferences = project.briefing?.stylePreferences || [];
+    let stylePreferences = project.briefing?.stylePreferences || [];
+    // "Sem estilos" ou array vazio = mostrar todos os profissionais (não filtrar por estilo)
+    const noStyleSentinel = 'sem estilos';
+    stylePreferences = stylePreferences.filter(
+      (s) => s && String(s).trim().toLowerCase() !== noStyleSentinel,
+    );
 
-    // Buscar profissionais aprovados, com match por estilo
+    // Buscar profissionais aprovados, com match por estilo (ou todos se sem preferência)
     const professionals = await this.prisma.professionalProfile.findMany({
       where: {
         status: 'APPROVED',

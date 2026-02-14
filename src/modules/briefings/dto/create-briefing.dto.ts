@@ -5,6 +5,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -27,6 +28,7 @@ export class CreateBriefingDto {
 
   @ApiPropertyOptional({ description: 'Orçamento disponível', example: 5000 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   budget?: number;

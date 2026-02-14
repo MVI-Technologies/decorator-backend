@@ -34,19 +34,8 @@ export class ProjectsController {
   }
 
   /**
-   * GET /api/v1/projects/:id — Detalhes do projeto
-   */
-  @Get(':id')
-  @ApiOperation({ summary: 'Detalhes do projeto' })
-  async findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.projectsService.findOne(id, user.id);
-  }
-
-  /**
    * GET /api/v1/projects/:id/match — Buscar profissionais compatíveis
+   * (rota mais específica deve vir antes de GET :id)
    */
   @Get(':id/match')
   @Roles(Role.CLIENT)
@@ -56,6 +45,18 @@ export class ProjectsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.projectsService.matchProfessionals(id, user.id);
+  }
+
+  /**
+   * GET /api/v1/projects/:id — Detalhes do projeto
+   */
+  @Get(':id')
+  @ApiOperation({ summary: 'Detalhes do projeto' })
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.projectsService.findOne(id, user.id);
   }
 
   /**
