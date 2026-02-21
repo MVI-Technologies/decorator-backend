@@ -22,6 +22,7 @@ import { RootController } from './root.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProfessionalsModule } from './modules/professionals/professionals.module';
+import { ClientsModule } from './modules/clients/clients.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { BriefingsModule } from './modules/briefings/briefings.module';
 import { ChatModule } from './modules/chat/chat.module';
@@ -49,6 +50,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     AuthModule,
     UsersModule,
     ProfessionalsModule,
+    ClientsModule,
     ProjectsModule,
     BriefingsModule,
     ChatModule,

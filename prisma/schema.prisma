@@ -118,15 +118,16 @@ model User {
 /// Perfil adicional do cliente.
 /// Contém dados de endereço e preferências de estilo.
 model ClientProfile {
-  id              String   @id @default(uuid())
-  userId          String   @unique @map("user_id")
-  address         String?
-  city            String?
-  state           String?
-  zipCode         String?  @map("zip_code")
-  preferredStyles String[] @default([]) @map("preferred_styles")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  address             String?
+  city                String?
+  state               String?
+  zipCode             String?  @map("zip_code")
+  preferredStyles     String[] @default([]) @map("preferred_styles")
+  onboardingCompleted Boolean  @default(false) @map("onboarding_completed")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   // Relação 1:1 com User
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
