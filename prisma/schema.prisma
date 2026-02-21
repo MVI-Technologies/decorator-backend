@@ -80,6 +80,14 @@ enum NotificationType {
   SYSTEM
 }
 
+/// Status da proposta (profissional → cliente)
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  NEGOTIATING
+}
+
 // ============================================
 // MODELO 1 — User (base)
 // ============================================
@@ -172,6 +180,7 @@ model ProfessionalProfile {
   styles         ProfessionalStyle[]
   portfolioItems PortfolioItem[]
   projects       Project[]           @relation("ProfessionalProjects")
+  proposals      Proposal[]
   withdrawals    Withdrawal[]
 
   @@map("professional_profiles")
@@ -203,12 +212,15 @@ model ProfessionalStyle {
 
 /// Item do portfólio do profissional.
 /// Exibido no perfil público para atrair clientes.
+/// Suporta imagem, documento (PDF/Word) ou link externo (site).
 model PortfolioItem {
   id                    String  @id @default(uuid())
   professionalProfileId String  @map("professional_profile_id")
   title                 String
   description           String?
-  imageUrl              String  @map("image_url")
+  imageUrl              String  @map("image_url") // imagem de capa/thumbnail (obrigatória para exibição)
+  documentUrl           String? @map("document_url") // URL do arquivo (PDF, Word, etc.)
+  linkUrl               String? @map("link_url") // URL externa (site do projeto, Behance, etc.)
   category              String?
   order                 Int     @default(0)
 
@@ -255,8 +267,34 @@ model Project {
   // Relações 1:N
   messages Message[]
   files    ProjectFile[]
+  proposals Proposal[]
 
   @@map("projects")
+}
+
+// ============================================
+// MODELO 6b — Proposal (proposta profissional → cliente)
+// ============================================
+
+/// Proposta enviada pelo profissional ao cliente (valor, escopo, prazo).
+/// Uma proposta PENDING mostra o card "Aceitar/Recusar"; ACCEPTED/DECLINED para histórico.
+model Proposal {
+  id                    String         @id @default(uuid())
+  projectId             String         @map("project_id")
+  professionalProfileId String         @map("professional_profile_id")
+  price                 Float
+  status                ProposalStatus @default(PENDING)
+  packageType           String?        @map("package_type")
+  estimatedDays         Int?           @map("estimated_days")
+  notes                 String?        // observações (message do modal)
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  professionalProfile  ProfessionalProfile  @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@map("proposals")
 }
 
 // ============================================

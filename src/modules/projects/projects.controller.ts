@@ -1,7 +1,12 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
-import { AssignProfessionalDto, RequestProposalDto, RequestRevisionDto } from './dto';
+import {
+  AssignProfessionalDto,
+  RequestProposalDto,
+  RequestRevisionDto,
+  SendProposalDto,
+} from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
@@ -60,6 +65,19 @@ export class ProjectsController {
   }
 
   /**
+   * DELETE /api/v1/projects/:id — Cancelar projeto (soft delete: status CANCELLED; histórico permanece)
+   */
+  @Delete(':id')
+  @Roles(Role.CLIENT)
+  @ApiOperation({ summary: 'Cancelar projeto (briefing/matching/negociando); notifica profissional; histórico visível' })
+  async deleteProject(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.projectsService.deleteProject(id, user.id);
+  }
+
+  /**
    * POST /api/v1/projects/:id/request-proposal — Iniciar conversa com profissional (solicitar proposta)
    */
   @Post(':id/request-proposal')
@@ -71,6 +89,20 @@ export class ProjectsController {
     @Body() dto: RequestProposalDto,
   ) {
     return this.projectsService.requestProposal(id, user.id, dto);
+  }
+
+  /**
+   * POST /api/v1/projects/:id/send-proposal — Profissional envia proposta (valor, escopo, prazo)
+   */
+  @Post(':id/send-proposal')
+  @Roles(Role.PROFESSIONAL)
+  @ApiOperation({ summary: 'Enviar proposta ao cliente (valor, escopo, prazo, observações)' })
+  async sendProposal(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SendProposalDto,
+  ) {
+    return this.projectsService.sendProposal(id, user.id, dto);
   }
 
   /**

@@ -131,6 +131,25 @@ export class ProfessionalsService {
   // ─── ESTILOS ────────────────────────────────────────
 
   /**
+   * Lista estilos associados ao perfil do profissional (para o próprio profissional ver).
+   */
+  async getMyStyles(userId: string) {
+    const profile = await this.prisma.professionalProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Perfil profissional não encontrado');
+    }
+
+    return this.prisma.professionalStyle.findMany({
+      where: { professionalProfileId: profile.id },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
    * Adiciona um estilo ao perfil.
    */
   async addStyle(userId: string, dto: CreateStyleDto) {

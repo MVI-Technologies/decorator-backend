@@ -6,7 +6,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AssignProfessionalDto, RequestProposalDto, RequestRevisionDto } from './dto';
+import {
+  AssignProfessionalDto,
+  RequestProposalDto,
+  RequestRevisionDto,
+  RespondProposalDto,
+  SendProposalDto,
+} from './dto';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -30,6 +36,7 @@ export class ProjectsService {
 
   /**
    * Lista todos os projetos do cliente com paginação.
+   * Inclui proposals em cada projeto para a aba Propostas (pendente de aceite: status PENDING).
    */
   async findAllByClient(clientId: string, page = 1, limit = 10) {
     const skip = (page - 1) * limit;
@@ -43,6 +50,14 @@ export class ProjectsService {
             include: { user: { select: { name: true, avatarUrl: true } } },
           },
           payment: true,
+          proposals: {
+            orderBy: { createdAt: 'desc' },
+            include: {
+              professionalProfile: {
+                include: { user: { select: { name: true } } },
+              },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -51,8 +66,33 @@ export class ProjectsService {
       this.prisma.project.count({ where: { clientId } }),
     ]);
 
+    const data = projects.map((project) => {
+      const proposals = (project.proposals || []).map((p) => ({
+        id: p.id,
+        projectId: p.projectId,
+        professionalProfileId: p.professionalProfileId,
+        price: p.price,
+        status: p.status,
+        packageType: p.packageType,
+        estimatedDays: p.estimatedDays,
+        notes: p.notes,
+        message: p.notes,
+        createdAt: p.createdAt,
+        professionalProfile: p.professionalProfile
+          ? {
+              displayName: p.professionalProfile.displayName,
+              user: p.professionalProfile.user
+                ? { name: p.professionalProfile.user.name }
+                : undefined,
+            }
+          : undefined,
+      }));
+      const { proposals: _, ...rest } = project;
+      return { ...rest, proposals };
+    });
+
     return {
-      data: projects,
+      data,
       meta: {
         total,
         page,
@@ -63,7 +103,7 @@ export class ProjectsService {
   }
 
   /**
-   * Detalhes de um projeto com todas as relações.
+   * Detalhes de um projeto com todas as relações, incluindo propostas (para o front mostrar card Aceitar/Recusar).
    */
   async findOne(projectId: string, userId: string) {
     const project = await this.prisma.project.findUnique({
@@ -83,6 +123,14 @@ export class ProjectsService {
           orderBy: { createdAt: 'desc' },
           take: 20,
         },
+        proposals: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            professionalProfile: {
+              include: { user: { select: { name: true } } },
+            },
+          },
+        },
       },
     });
 
@@ -98,7 +146,91 @@ export class ProjectsService {
       throw new ForbiddenException('Sem permissão para acessar este projeto');
     }
 
-    return project;
+    // Normalizar propostas para o mesmo formato de GET /proposals/:projectId (status string, message alias de notes)
+    const proposals = (project.proposals || []).map((p) => ({
+      id: p.id,
+      projectId: p.projectId,
+      professionalProfileId: p.professionalProfileId,
+      price: p.price,
+      status: p.status,
+      packageType: p.packageType,
+      estimatedDays: p.estimatedDays,
+      notes: p.notes,
+      message: p.notes,
+      createdAt: p.createdAt,
+      professionalProfile: p.professionalProfile
+        ? {
+            displayName: p.professionalProfile.displayName,
+            user: p.professionalProfile.user
+              ? { name: p.professionalProfile.user.name }
+              : undefined,
+          }
+        : undefined,
+    }));
+
+    return {
+      ...project,
+      proposals,
+    };
+  }
+
+  /**
+   * Cancela o projeto (soft delete): status → CANCELLED, sem apagar.
+   * Apenas cliente dono, apenas status até NEGOCIANDO e sem proposta aceita.
+   * Se houver profissional vinculado, envia notificação. Histórico (chat, propostas) permanece visível.
+   */
+  async deleteProject(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { professionalProfile: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (project.clientId !== userId) {
+      throw new ForbiddenException('Apenas o dono do projeto pode cancelá-lo');
+    }
+
+    const allowedStatuses = ['BRIEFING_SUBMITTED', 'MATCHING', 'NEGOCIANDO'];
+    if (!allowedStatuses.includes(project.status)) {
+      throw new BadRequestException(
+        'Só é possível cancelar o projeto enquanto estiver em briefing, matching ou negociação',
+      );
+    }
+
+    const acceptedProposal = await this.prisma.proposal.findFirst({
+      where: { projectId, status: 'ACCEPTED' },
+    });
+    if (acceptedProposal) {
+      throw new BadRequestException(
+        'Não é possível cancelar o projeto: já existe uma proposta aceita (projeto já contratado).',
+      );
+    }
+
+    const professionalUserId = project.professionalProfile?.userId;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (professionalUserId) {
+        await tx.notification.create({
+          data: {
+            userId: professionalUserId,
+            type: 'PROJECT_UPDATE',
+            title: 'Projeto cancelado',
+            message: `O projeto "${project.title}" foi cancelado pelo cliente.`,
+            data: { projectId, projectTitle: project.title },
+          },
+        });
+      }
+      await tx.project.update({
+        where: { id: projectId },
+        data: { status: 'CANCELLED' },
+      });
+    });
+
+    this.logger.log(`Projeto ${projectId} cancelado (soft delete); notificação enviada ao profissional.`);
+    return { success: true, message: 'Projeto cancelado com sucesso.' };
   }
 
   /**
@@ -187,9 +319,9 @@ export class ProjectsService {
       throw new BadRequestException('Profissional não encontrado ou não aprovado');
     }
 
+    const text = (dto.message ?? dto.initialMessage ?? '').trim();
     const content =
-      (dto.initialMessage && dto.initialMessage.trim()) ||
-      'Olá! Iniciei uma conversa sobre este projeto. O briefing completo está disponível.';
+      text || 'Olá! Iniciei uma conversa sobre este projeto. O briefing completo está disponível.';
 
     const [updatedProject] = await this.prisma.$transaction([
       this.prisma.project.update({
@@ -218,6 +350,182 @@ export class ProjectsService {
       `Conversa iniciada: projeto ${projectId} com profissional ${dto.professionalProfileId}`,
     );
     return updatedProject;
+  }
+
+  /**
+   * Profissional envia proposta ao cliente.
+   * Cria registro Proposal PENDING, garante projeto NEGOCIANDO, opcional mensagem no chat.
+   */
+  async sendProposal(projectId: string, userId: string, dto: SendProposalDto) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { professionalProfile: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (
+      !project.professionalProfileId ||
+      !project.professionalProfile ||
+      project.professionalProfile.userId !== userId
+    ) {
+      throw new ForbiddenException('Apenas o profissional vinculado pode enviar proposta');
+    }
+
+    if (project.status !== 'NEGOCIANDO') {
+      throw new BadRequestException(
+        'Só é possível enviar proposta enquanto o projeto está em negociação',
+      );
+    }
+
+    const parts: string[] = [
+      `**Proposta:** R$ ${dto.price.toLocaleString('pt-BR')}`,
+      ...(dto.packageType ? [`**Pacote / Escopo:** ${dto.packageType}`] : []),
+      ...(dto.deadlineDays ? [`**Prazo estimado:** ${dto.deadlineDays} dias`] : []),
+      ...(dto.message?.trim() ? ['', dto.message.trim()] : []),
+    ];
+    const content = parts.join('\n');
+
+    await this.prisma.$transaction([
+      this.prisma.proposal.create({
+        data: {
+          projectId,
+          professionalProfileId: project.professionalProfileId,
+          price: dto.price,
+          status: 'PENDING',
+          packageType: dto.packageType,
+          estimatedDays: dto.deadlineDays,
+          notes: dto.message?.trim() || undefined,
+        },
+      }),
+      this.prisma.project.update({
+        where: { id: projectId },
+        data: {
+          status: 'NEGOCIANDO',
+          price: dto.price,
+          ...(dto.packageType && { packageType: dto.packageType }),
+        },
+      }),
+      this.prisma.message.create({
+        data: {
+          projectId,
+          senderId: userId,
+          content,
+        },
+      }),
+    ]);
+
+    this.logger.log(`Proposta PENDING criada no projeto ${projectId}: R$ ${dto.price}`);
+    return this.getProposalsByProject(projectId, userId);
+  }
+
+  /**
+   * Lista propostas do projeto (cliente ou profissional do projeto).
+   * Front usa proposta com status PENDING para mostrar card Aceitar/Recusar.
+   */
+  async getProposalsByProject(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { professionalProfile: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    const isClient = project.clientId === userId;
+    const isProfessional =
+      project.professionalProfile?.userId === userId;
+    if (!isClient && !isProfessional) {
+      throw new ForbiddenException('Sem permissão para ver propostas deste projeto');
+    }
+
+    const data = await this.prisma.proposal.findMany({
+      where: { projectId },
+      include: {
+        professionalProfile: {
+          include: {
+            user: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      data: data.map((p) => ({
+        id: p.id,
+        projectId: p.projectId,
+        professionalProfileId: p.professionalProfileId,
+        price: p.price,
+        status: p.status,
+        packageType: p.packageType,
+        estimatedDays: p.estimatedDays,
+        notes: p.notes,
+        message: p.notes,
+        createdAt: p.createdAt,
+        professionalProfile: p.professionalProfile
+          ? {
+              displayName: p.professionalProfile.displayName,
+              user: p.professionalProfile.user
+                ? { name: p.professionalProfile.user.name }
+                : undefined,
+            }
+          : undefined,
+      })),
+    };
+  }
+
+  /**
+   * Cliente aceita ou recusa proposta.
+   * Aceitar: proposta → ACCEPTED, projeto → PROFESSIONAL_ASSIGNED (e payment criado depois pelo fluxo de assign).
+   * Recusar: proposta → DECLINED, projeto permanece NEGOCIANDO.
+   */
+  async respondToProposal(proposalId: string, userId: string, dto: RespondProposalDto) {
+    const proposal = await this.prisma.proposal.findUnique({
+      where: { id: proposalId },
+      include: { project: true },
+    });
+
+    if (!proposal) {
+      throw new NotFoundException('Proposta não encontrada');
+    }
+
+    if (proposal.project.clientId !== userId) {
+      throw new ForbiddenException('Apenas o cliente do projeto pode aceitar ou recusar a proposta');
+    }
+
+    if (proposal.status !== 'PENDING') {
+      throw new BadRequestException('Esta proposta já foi respondida');
+    }
+
+    if (dto.action === 'accept') {
+      await this.prisma.$transaction([
+        this.prisma.proposal.update({
+          where: { id: proposalId },
+          data: { status: 'ACCEPTED' },
+        }),
+        this.prisma.project.update({
+          where: { id: proposal.projectId },
+          data: {
+            status: 'PROFESSIONAL_ASSIGNED',
+            price: proposal.price,
+            packageType: proposal.packageType ?? undefined,
+          },
+        }),
+      ]);
+      this.logger.log(`Proposta ${proposalId} aceita; projeto ${proposal.projectId} → PROFESSIONAL_ASSIGNED`);
+    } else {
+      await this.prisma.proposal.update({
+        where: { id: proposalId },
+        data: { status: 'DECLINED' },
+      });
+      this.logger.log(`Proposta ${proposalId} recusada; projeto permanece NEGOCIANDO`);
+    }
+
+    return this.getProposalsByProject(proposal.projectId, userId);
   }
 
   /**

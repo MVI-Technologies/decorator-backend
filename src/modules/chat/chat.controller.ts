@@ -14,6 +14,12 @@ import { AuthenticatedUser } from '../../common/interfaces/auth.interface';
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  @Get('unread-summary')
+  @ApiOperation({ summary: 'Resumo de mensagens não lidas (badge aba Chats e por conversa)' })
+  async getUnreadSummary(@CurrentUser() user: AuthenticatedUser) {
+    return this.chatService.getUnreadSummary(user.id, user.role);
+  }
+
   @Get(':projectId/messages')
   @ApiOperation({ summary: 'Listar mensagens do projeto (cliente, profissional ou admin)' })
   @ApiQuery({ name: 'page', required: false, type: Number })

@@ -14,7 +14,7 @@ export class RequestProposalDto {
   professionalProfileId: string;
 
   @ApiPropertyOptional({
-    description: 'Mensagem inicial opcional para o profissional',
+    description: 'Mensagem inicial opcional para o profissional (aceita "message" ou "initialMessage")',
     example: 'Tenho urgência no projeto, meu apartamento fica em SP e preciso de acabamentos sustentáveis.',
     maxLength: 2000,
   })
@@ -22,4 +22,13 @@ export class RequestProposalDto {
   @IsString()
   @MaxLength(2000)
   initialMessage?: string;
+
+  @ApiPropertyOptional({
+    description: 'Mensagem inicial (alias de initialMessage)',
+    maxLength: 2000,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  message?: string;
 }

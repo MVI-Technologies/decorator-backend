@@ -67,6 +67,19 @@ export class ProfessionalsController {
     return this.professionalsService.updateProfile(user.id, dto);
   }
 
+  // ─── ESTILOS (listar antes de portfólio para rotas me/*) ───
+
+  /**
+   * GET /api/v1/professionals/me/styles — Listar estilos associados ao meu perfil
+   */
+  @Get('me/styles')
+  @Roles(Role.PROFESSIONAL)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Listar estilos associados ao meu perfil' })
+  async getMyStyles(@CurrentUser() user: AuthenticatedUser) {
+    return this.professionalsService.getMyStyles(user.id);
+  }
+
   // ─── PORTFÓLIO ────────────────────────────────────────
 
   /**
@@ -96,8 +109,6 @@ export class ProfessionalsController {
   ) {
     return this.professionalsService.removePortfolioItem(user.id, itemId);
   }
-
-  // ─── ESTILOS ────────────────────────────────────────
 
   /**
    * POST /api/v1/professionals/me/styles — Adicionar estilo

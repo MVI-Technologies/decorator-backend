@@ -137,4 +137,44 @@ export class ChatService {
 
     return { success: true };
   }
+
+  /**
+   * Resumo de mensagens não lidas para o usuário (badge na aba Chats e por conversa).
+   * Conta como não lida: mensagem do projeto em que o usuário participa, enviada por outro, isRead = false.
+   */
+  async getUnreadSummary(userId: string, role?: Role) {
+    const projectIds = await this.prisma.project.findMany({
+      where: {
+        OR: [
+          { clientId: userId },
+          { professionalProfile: { userId } },
+        ],
+      },
+      select: { id: true },
+    }).then((rows) => rows.map((r) => r.id));
+
+    if (projectIds.length === 0) {
+      return { chatsWithUnread: 0, byProject: {} };
+    }
+
+    const unreadCounts = await this.prisma.message.groupBy({
+      by: ['projectId'],
+      where: {
+        projectId: { in: projectIds },
+        senderId: { not: userId },
+        isRead: false,
+      },
+      _count: { id: true },
+    });
+
+    const byProject: Record<string, number> = {};
+    for (const row of unreadCounts) {
+      byProject[row.projectId] = row._count.id;
+    }
+
+    return {
+      chatsWithUnread: unreadCounts.length,
+      byProject,
+    };
+  }
 }
