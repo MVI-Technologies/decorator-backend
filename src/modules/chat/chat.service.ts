@@ -29,8 +29,16 @@ export class ChatService {
 
   /**
    * Cria uma nova mensagem no chat do projeto.
+   * fileStoragePath: path no bucket privado do chat (para renovar signed URL depois).
    */
-  async createMessage(projectId: string, senderId: string, content: string, fileUrl?: string) {
+  async createMessage(
+    projectId: string,
+    senderId: string,
+    content: string,
+    fileUrl?: string,
+    fileStoragePath?: string,
+    fileType?: string,
+  ) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: { professionalProfile: true },
@@ -55,6 +63,8 @@ export class ChatService {
         senderId,
         content,
         fileUrl,
+        fileStoragePath: fileStoragePath ?? undefined,
+        fileType: fileType as 'IMAGE' | 'PDF' | 'DOCUMENT' | 'OTHER' | undefined,
       },
       include: {
         sender: { select: { name: true, avatarUrl: true } },

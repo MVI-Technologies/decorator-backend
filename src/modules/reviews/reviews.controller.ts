@@ -32,6 +32,20 @@ export class ReviewsController {
   }
 
   /**
+   * GET /api/v1/reviews/project/:projectId — Buscar a avaliação que eu dei para este projeto (nota e comentário)
+   */
+  @Get('project/:projectId')
+  @Roles(Role.CLIENT)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Buscar avaliação do projeto (nota e comentário que o cliente deu)' })
+  async findByProject(
+    @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reviewsService.findByProject(projectId, user.id);
+  }
+
+  /**
    * GET /api/v1/reviews/professional/:id — Reviews públicas do profissional
    */
   @Public()

@@ -1,19 +1,31 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../auth/supabase.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Role } from '../../common/enums/role.enum';
+
+/** Bucket público: fotos (avatar, portfólio, etc.). */
+const BUCKET_PUBLIC = 'decorador-files';
+
+/** Bucket privado: anexos do chat (acesso via signed URL). */
+const BUCKET_CHAT_DEFAULT = 'decorador-chat';
 
 /**
  * Service de Storage.
- * Upload e gerenciamento de arquivos via Supabase Storage.
+ * - Fotos/arquivos públicos: bucket decorador-files.
+ * - Anexos do chat: bucket privado separado (decorador-chat), acesso via signed URL.
  */
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  private readonly bucket = 'decorador-files';
+  private readonly bucket = BUCKET_PUBLIC;
+  private readonly chatBucket: string;
 
   /** Tipos MIME permitidos e extensão para avatar */
   private readonly avatarAllowedMimes: Record<string, string> = {
@@ -27,10 +39,15 @@ export class StorageService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly configService: ConfigService,
-  ) {}
+    private readonly prisma: PrismaService,
+  ) {
+    this.chatBucket = this.configService.get<string>('STORAGE_CHAT_BUCKET', BUCKET_CHAT_DEFAULT);
+  }
 
   /**
    * Faz upload de um arquivo para o Supabase Storage.
+   * - folder !== 'chat': bucket público (decorador-files), retorna URL pública.
+   * - folder === 'chat': bucket privado (decorador-chat), retorna signed URL + path (para refresh).
    */
   async uploadFile(
     file: Express.Multer.File,
@@ -48,12 +65,16 @@ export class StorageService {
 
     const timestamp = Date.now();
     const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filePath = `${folder}/${userId}/${timestamp}_${safeName}`;
+    const isChat = folder === 'chat';
+    const filePath = isChat
+      ? `${userId}/${timestamp}_${safeName}`
+      : `${folder}/${userId}/${timestamp}_${safeName}`;
+    const bucketToUse = isChat ? this.chatBucket : this.bucket;
 
     const client = this.supabaseService.getAdminClient();
 
     const { data, error } = await client.storage
-      .from(this.bucket)
+      .from(bucketToUse)
       .upload(filePath, file.buffer, {
         contentType: file.mimetype,
         upsert: false,
@@ -64,13 +85,34 @@ export class StorageService {
       throw new BadRequestException('Erro ao fazer upload do arquivo');
     }
 
-    // Gerar URL pública
+    if (isChat) {
+      // Bucket privado: retornar signed URL (7 dias) + path para refresh
+      const expiresIn = 7 * 24 * 60 * 60; // 7 dias em segundos
+      const { data: signedData, error: signedError } = await client.storage
+        .from(bucketToUse)
+        .createSignedUrl(data.path, expiresIn);
+
+      if (signedError || !signedData?.signedUrl) {
+        this.logger.error(`Erro ao gerar signed URL: ${signedError?.message}`);
+        throw new BadRequestException('Erro ao gerar link do arquivo');
+      }
+
+      this.logger.log(`Upload chat: ${filePath} (${file.size} bytes)`);
+      return {
+        path: data.path,
+        url: signedData.signedUrl,
+        fileName: file.originalname,
+        size: file.size,
+        mimeType: file.mimetype,
+      };
+    }
+
+    // Bucket público: URL pública
     const { data: urlData } = client.storage
-      .from(this.bucket)
+      .from(bucketToUse)
       .getPublicUrl(data.path);
 
     this.logger.log(`Upload: ${filePath} (${file.size} bytes)`);
-
     return {
       path: data.path,
       url: urlData.publicUrl,
@@ -155,13 +197,59 @@ export class StorageService {
   }
 
   /**
-   * Remove um arquivo do Supabase Storage.
+   * Retorna uma signed URL para um arquivo do chat (bucket privado).
+   * Só gera URL se o usuário tiver acesso à mensagem (cliente, profissional ou admin do projeto).
    */
-  async deleteFile(filePath: string) {
+  async getChatFileSignedUrl(
+    path: string,
+    userId: string,
+    role: Role,
+  ): Promise<{ url: string }> {
+    const message = await this.prisma.message.findFirst({
+      where: { fileStoragePath: path },
+      include: {
+        project: {
+          include: { professionalProfile: true },
+        },
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundException('Arquivo não encontrado');
+    }
+
+    const project = message.project;
+    const isClient = project.clientId === userId;
+    const isProfessional = project.professionalProfile?.userId === userId;
+    const isAdmin = role === Role.ADMIN;
+    if (!isClient && !isProfessional && !isAdmin) {
+      throw new ForbiddenException('Sem permissão para acessar este arquivo');
+    }
+
     const client = this.supabaseService.getAdminClient();
+    const expiresIn = 60 * 60; // 1 hora
+    const { data, error } = await client.storage
+      .from(this.chatBucket)
+      .createSignedUrl(path, expiresIn);
+
+    if (error || !data?.signedUrl) {
+      this.logger.error(`Erro signed URL: ${error?.message}`);
+      throw new BadRequestException('Erro ao gerar link do arquivo');
+    }
+
+    return { url: data.signedUrl };
+  }
+
+  /**
+   * Remove um arquivo do Supabase Storage.
+   * Para arquivos do chat, use bucket=chat (query) para o bucket privado.
+   */
+  async deleteFile(filePath: string, bucket?: string) {
+    const client = this.supabaseService.getAdminClient();
+    const bucketToUse = bucket === 'chat' ? this.chatBucket : this.bucket;
 
     const { error } = await client.storage
-      .from(this.bucket)
+      .from(bucketToUse)
       .remove([filePath]);
 
     if (error) {

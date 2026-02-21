@@ -91,6 +91,31 @@ export class ReviewsService {
   }
 
   /**
+   * Busca a avaliação que o cliente fez para um projeto (nota e comentário).
+   * Só o cliente dono do projeto pode ver.
+   */
+  async findByProject(projectId: string, clientId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { review: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (project.clientId !== clientId) {
+      throw new ForbiddenException('Sem permissão para ver esta avaliação');
+    }
+
+    if (!project.review) {
+      throw new NotFoundException('Este projeto ainda não foi avaliado');
+    }
+
+    return project.review;
+  }
+
+  /**
    * Lista reviews de um profissional (público).
    */
   async findByProfessional(professionalProfileId: string, page = 1, limit = 10) {

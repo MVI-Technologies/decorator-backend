@@ -291,13 +291,14 @@ model Briefing {
 /// Mensagem do chat de um projeto.
 /// Suporta texto e arquivos anexados.
 model Message {
-  id        String    @id @default(uuid())
-  projectId String    @map("project_id")
-  senderId  String    @map("sender_id")
-  content   String
-  fileUrl   String?   @map("file_url")
-  fileType  FileType?  @map("file_type")
-  isRead    Boolean   @default(false) @map("is_read")
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  senderId        String    @map("sender_id")
+  content         String
+  fileUrl         String?   @map("file_url")
+  fileStoragePath String?   @map("file_storage_path") // path no bucket privado do chat (para gerar signed URL)
+  fileType        FileType? @map("file_type")
+  isRead          Boolean   @default(false) @map("is_read")
 
   createdAt DateTime @default(now()) @map("created_at")
 

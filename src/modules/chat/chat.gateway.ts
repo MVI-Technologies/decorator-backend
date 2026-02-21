@@ -54,6 +54,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Envia uma mensagem no chat do projeto.
+   * fileStoragePath: path no bucket privado do chat (para renovar signed URL).
    */
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
@@ -64,6 +65,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       senderId: string;
       content: string;
       fileUrl?: string;
+      fileStoragePath?: string;
+      fileType?: string;
     },
   ) {
     const message = await this.chatService.createMessage(
@@ -71,6 +74,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.senderId,
       data.content,
       data.fileUrl,
+      data.fileStoragePath,
+      data.fileType,
     );
 
     if (message) {
