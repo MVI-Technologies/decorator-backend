@@ -27,7 +27,7 @@ export class AdminService {
   // ─── DASHBOARD ────────────────────────────────────────
 
   /**
-   * Retorna métricas gerais da plataforma.
+   * Retorna métricas gerais da plataforma (para os cards do dashboard).
    */
   async getDashboard() {
     const [
@@ -35,6 +35,7 @@ export class AdminService {
       totalClients,
       totalProfessionals,
       pendingApprovals,
+      totalProjects,
       activeProjects,
       completedProjects,
       pendingWithdrawals,
@@ -44,6 +45,7 @@ export class AdminService {
       this.prisma.user.count({ where: { role: 'CLIENT' } }),
       this.prisma.user.count({ where: { role: 'PROFESSIONAL' } }),
       this.prisma.professionalProfile.count({ where: { status: 'PENDING_APPROVAL' } }),
+      this.prisma.project.count(),
       this.prisma.project.count({ where: { status: { in: ['IN_PROGRESS', 'DELIVERED', 'REVISION_REQUESTED'] } } }),
       this.prisma.project.count({ where: { status: 'COMPLETED' } }),
       this.prisma.withdrawal.count({ where: { status: 'REQUESTED' } }),
@@ -53,10 +55,64 @@ export class AdminService {
     return {
       users: { total: totalUsers, clients: totalClients, professionals: totalProfessionals },
       professionals: { pendingApprovals },
-      projects: { active: activeProjects, completed: completedProjects },
+      projects: {
+        total: totalProjects,
+        active: activeProjects,
+        completed: completedProjects,
+      },
       finance: {
         totalPlatformRevenue: totalRevenue._sum.platformFee || 0,
         pendingWithdrawals,
+      },
+    };
+  }
+
+  /**
+   * Lista todos os projetos (admin). Retorna projeto, cliente, profissional e status do pagamento.
+   */
+  async getProjects(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+
+    const [projects, total] = await Promise.all([
+      this.prisma.project.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          client: {
+            select: { id: true, name: true, email: true },
+          },
+          professionalProfile: {
+            select: {
+              id: true,
+              displayName: true,
+              user: { select: { id: true, name: true, email: true } },
+            },
+          },
+          payment: {
+            select: {
+              id: true,
+              status: true,
+              amount: true,
+              platformFee: true,
+              professionalAmount: true,
+              createdAt: true,
+              escrowStartedAt: true,
+              releasedAt: true,
+            },
+          },
+        },
+      }),
+      this.prisma.project.count(),
+    ]);
+
+    return {
+      data: projects,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }
@@ -267,16 +323,19 @@ export class AdminService {
 
   /**
    * Lista pagamentos já recebidos pelo admin que ainda não foram repassados ao profissional (em até 4 dias úteis).
+   * Retorna valor total do projeto, valor a repassar (já descontados 15%), nome do cliente, do profissional e chave PIX.
    */
   async getPaymentsPendingTransferToProfessional() {
-    return this.prisma.payment.findMany({
+    const payments = await this.prisma.payment.findMany({
       where: { status: 'IN_ESCROW' },
       include: {
         project: {
           include: {
             client: { select: { name: true } },
             professionalProfile: {
-              include: {
+              select: {
+                id: true,
+                pixKey: true,
                 user: { select: { name: true, email: true } },
               },
             },
@@ -285,6 +344,19 @@ export class AdminService {
       },
       orderBy: { escrowStartedAt: 'asc' },
     });
+
+    return payments.map((p) => ({
+      id: p.id,
+      projectId: p.projectId,
+      projectTitle: p.project.title,
+      clientName: p.project.client.name,
+      professionalName: p.project.professionalProfile?.user.name ?? null,
+      professionalPixKey: p.project.professionalProfile?.pixKey ?? null,
+      totalAmount: p.amount,
+      platformFee: p.platformFee,
+      amountToTransfer: p.professionalAmount,
+      escrowStartedAt: p.escrowStartedAt,
+    }));
   }
 
   /**

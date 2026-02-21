@@ -15,7 +15,7 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Get(':projectId/messages')
-  @ApiOperation({ summary: 'Listar mensagens do projeto' })
+  @ApiOperation({ summary: 'Listar mensagens do projeto (cliente, profissional ou admin)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getMessages(
@@ -24,15 +24,15 @@ export class ChatController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.chatService.getMessages(projectId, user.id, page, limit);
+    return this.chatService.getMessages(projectId, user.id, page, limit, user.role);
   }
 
   @Post(':projectId/read')
-  @ApiOperation({ summary: 'Marcar mensagens como lidas' })
+  @ApiOperation({ summary: 'Marcar mensagens como lidas (cliente, profissional ou admin)' })
   async markAsRead(
     @Param('projectId') projectId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.chatService.markAsRead(projectId, user.id);
+    return this.chatService.markAsRead(projectId, user.id, user.role);
   }
 }

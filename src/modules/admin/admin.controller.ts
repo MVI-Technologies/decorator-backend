@@ -21,9 +21,20 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('dashboard')
-  @ApiOperation({ summary: 'Dashboard com métricas da plataforma' })
+  @ApiOperation({ summary: 'Dashboard com métricas da plataforma (quantidades para os cards)' })
   async getDashboard() {
     return this.adminService.getDashboard();
+  }
+
+  @Get('projects')
+  @ApiOperation({ summary: 'Listar todos os projetos (projeto, cliente, profissional, status do pagamento)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getProjects(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getProjects(page, limit);
   }
 
   @Get('professionals/pending')
