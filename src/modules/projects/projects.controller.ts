@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
-import { AssignProfessionalDto, RequestRevisionDto } from './dto';
+import { AssignProfessionalDto, RequestProposalDto, RequestRevisionDto } from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
@@ -57,6 +57,20 @@ export class ProjectsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.projectsService.findOne(id, user.id);
+  }
+
+  /**
+   * POST /api/v1/projects/:id/request-proposal — Iniciar conversa com profissional (solicitar proposta)
+   */
+  @Post(':id/request-proposal')
+  @Roles(Role.CLIENT)
+  @ApiOperation({ summary: 'Iniciar conversa com decorador e solicitar proposta' })
+  async requestProposal(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: RequestProposalDto,
+  ) {
+    return this.projectsService.requestProposal(id, user.id, dto);
   }
 
   /**

@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AssignProfessionalDto, RequestRevisionDto } from './dto';
+import { AssignProfessionalDto, RequestProposalDto, RequestRevisionDto } from './dto';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -152,6 +152,72 @@ export class ProjectsService {
     });
 
     return professionals;
+  }
+
+  /**
+   * Inicia conversa com um profissional (solicitar proposta).
+   * Coloca o projeto em NEGOCIANDO, vincula o profissional e opcionalmente envia mensagem inicial.
+   */
+  async requestProposal(projectId: string, clientId: string, dto: RequestProposalDto) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { briefing: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    if (project.clientId !== clientId) {
+      throw new ForbiddenException('Sem permissão para este projeto');
+    }
+
+    const allowedStatuses = ['BRIEFING_SUBMITTED', 'MATCHING'];
+    if (!allowedStatuses.includes(project.status)) {
+      throw new BadRequestException(
+        'Só é possível iniciar conversa enquanto o projeto está em briefing ou matching',
+      );
+    }
+
+    const professional = await this.prisma.professionalProfile.findUnique({
+      where: { id: dto.professionalProfileId },
+    });
+
+    if (!professional || professional.status !== 'APPROVED') {
+      throw new BadRequestException('Profissional não encontrado ou não aprovado');
+    }
+
+    const content =
+      (dto.initialMessage && dto.initialMessage.trim()) ||
+      'Olá! Iniciei uma conversa sobre este projeto. O briefing completo está disponível.';
+
+    const [updatedProject] = await this.prisma.$transaction([
+      this.prisma.project.update({
+        where: { id: projectId },
+        data: {
+          status: 'NEGOCIANDO',
+          professionalProfileId: dto.professionalProfileId,
+        },
+        include: {
+          briefing: true,
+          professionalProfile: {
+            include: { user: { select: { name: true, avatarUrl: true, email: true } } },
+          },
+        },
+      }),
+      this.prisma.message.create({
+        data: {
+          projectId,
+          senderId: clientId,
+          content,
+        },
+      }),
+    ]);
+
+    this.logger.log(
+      `Conversa iniciada: projeto ${projectId} com profissional ${dto.professionalProfileId}`,
+    );
+    return updatedProject;
   }
 
   /**

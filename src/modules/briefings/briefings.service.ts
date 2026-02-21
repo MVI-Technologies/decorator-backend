@@ -107,8 +107,8 @@ export class BriefingsService {
       throw new ForbiddenException('Você não tem permissão para editar este briefing');
     }
 
-    // Só pode editar se o projeto ainda está em fase de briefing ou matching
-    const editableStatuses = ['BRIEFING_SUBMITTED', 'MATCHING'];
+    // Só pode editar se o projeto ainda está em fase de briefing, matching ou negociando
+    const editableStatuses = ['BRIEFING_SUBMITTED', 'MATCHING', 'NEGOCIANDO'];
     if (!editableStatuses.includes(briefing.project.status)) {
       throw new BadRequestException(
         'O briefing só pode ser editado enquanto o projeto está em fase de briefing ou matching',
@@ -170,7 +170,7 @@ export class BriefingsService {
 
   /**
    * Remove um briefing e o projeto associado.
-   * Apenas o cliente dono pode excluir, e só enquanto o projeto está em BRIEFING_SUBMITTED ou MATCHING.
+   * Apenas o cliente dono pode excluir, e só enquanto o projeto está em BRIEFING_SUBMITTED, MATCHING ou NEGOCIANDO.
    */
   async remove(briefingId: string, clientId: string) {
     const briefing = await this.prisma.briefing.findUnique({
@@ -186,7 +186,7 @@ export class BriefingsService {
       throw new ForbiddenException('Você não tem permissão para excluir este briefing');
     }
 
-    const deletableStatuses = ['BRIEFING_SUBMITTED', 'MATCHING'];
+    const deletableStatuses = ['BRIEFING_SUBMITTED', 'MATCHING', 'NEGOCIANDO'];
     if (!deletableStatuses.includes(briefing.project.status)) {
       throw new BadRequestException(
         'O briefing só pode ser excluído enquanto o projeto está em fase de briefing ou matching',

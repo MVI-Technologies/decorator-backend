@@ -1,2 +1,2 @@
 export * from './update-user.dto';
-export * from './update-client-profile.dto';
+export { UpdateClientProfileDto } from '../../clients/dto';

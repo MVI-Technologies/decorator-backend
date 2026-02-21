@@ -79,10 +79,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (message) {
-      // Emitir para todos na sala do projeto
-      this.server
-        .to(`project:${data.projectId}`)
-        .emit('newMessage', message);
+      // Payload para o front: id evita duplicata no cache; sender evita refetch para nome/role
+      const payload = {
+        id: message.id,
+        projectId: message.projectId,
+        senderId: message.senderId,
+        content: message.content,
+        createdAt: message.createdAt.toISOString(),
+        ...(message.fileUrl && { fileUrl: message.fileUrl }),
+        ...(message.fileStoragePath && { fileStoragePath: message.fileStoragePath }),
+        ...(message.sender && {
+          sender: {
+            id: message.sender.id,
+            name: message.sender.name,
+            role: message.sender.role,
+          },
+        }),
+      };
+      // Broadcast para a sala inteira (incluindo o autor) — chat instantâneo sem polling
+      this.server.to(`project:${data.projectId}`).emit('newMessage', payload);
     }
 
     return message;

@@ -124,6 +124,7 @@ export class UsersService {
         ...(dto.state !== undefined && { state: dto.state }),
         ...(dto.zipCode !== undefined && { zipCode: dto.zipCode }),
         ...(dto.preferredStyles !== undefined && { preferredStyles: dto.preferredStyles }),
+        ...(dto.onboardingCompleted !== undefined && { onboardingCompleted: dto.onboardingCompleted }),
       },
     });
   }

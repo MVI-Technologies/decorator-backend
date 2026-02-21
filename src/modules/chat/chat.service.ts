@@ -67,7 +67,7 @@ export class ChatService {
         fileType: fileType as 'IMAGE' | 'PDF' | 'DOCUMENT' | 'OTHER' | undefined,
       },
       include: {
-        sender: { select: { name: true, avatarUrl: true } },
+        sender: { select: { id: true, name: true, role: true } },
       },
     });
 
