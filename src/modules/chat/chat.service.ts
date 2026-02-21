@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Role } from '../../common/enums/role.enum';
 
 /**
  * Service de Chat.
- * Gerencia mensagens entre cliente e profissional em um projeto.
+ * Gerencia mensagens entre cliente, profissional e admin em um projeto.
  */
 @Injectable()
 export class ChatService {
@@ -12,10 +13,24 @@ export class ChatService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Verifica se o usuário tem acesso ao chat do projeto (cliente, profissional ou admin).
+   */
+  private async canAccessProjectChat(projectId: string, userId: string, role?: Role): Promise<boolean> {
+    if (role === Role.ADMIN) return true;
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { professionalProfile: true },
+    });
+    if (!project) return false;
+    const isClient = project.clientId === userId;
+    const isProfessional = project.professionalProfile?.userId === userId;
+    return isClient || isProfessional;
+  }
+
+  /**
    * Cria uma nova mensagem no chat do projeto.
    */
   async createMessage(projectId: string, senderId: string, content: string, fileUrl?: string) {
-    // Verificar se o usuário tem acesso ao projeto
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: { professionalProfile: true },
@@ -23,9 +38,16 @@ export class ChatService {
 
     if (!project) return null;
 
+    const sender = await this.prisma.user.findUnique({
+      where: { id: senderId },
+      select: { role: true },
+    });
+    if (!sender) return null;
+
     const isClient = project.clientId === senderId;
     const isProfessional = project.professionalProfile?.userId === senderId;
-    if (!isClient && !isProfessional) return null;
+    const isAdmin = sender.role === Role.ADMIN;
+    if (!isClient && !isProfessional && !isAdmin) return null;
 
     const message = await this.prisma.message.create({
       data: {
@@ -45,8 +67,15 @@ export class ChatService {
 
   /**
    * Lista mensagens de um projeto (paginado, mais recentes primeiro).
+   * Acesso: cliente do projeto, profissional do projeto ou admin.
    */
-  async getMessages(projectId: string, userId: string, page = 1, limit = 50) {
+  async getMessages(
+    projectId: string,
+    userId: string,
+    page = 1,
+    limit = 50,
+    role?: Role,
+  ) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: { professionalProfile: true },
@@ -56,7 +85,10 @@ export class ChatService {
 
     const isClient = project.clientId === userId;
     const isProfessional = project.professionalProfile?.userId === userId;
-    if (!isClient && !isProfessional) return { data: [], meta: { total: 0, page, limit, totalPages: 0 } };
+    const isAdmin = role === Role.ADMIN;
+    if (!isClient && !isProfessional && !isAdmin) {
+      return { data: [], meta: { total: 0, page, limit, totalPages: 0 } };
+    }
 
     const skip = (page - 1) * limit;
 
@@ -78,9 +110,12 @@ export class ChatService {
   }
 
   /**
-   * Marca mensagens como lidas.
+   * Marca mensagens como lidas. Acesso: cliente, profissional ou admin do projeto.
    */
-  async markAsRead(projectId: string, userId: string) {
+  async markAsRead(projectId: string, userId: string, role?: Role) {
+    const canAccess = await this.canAccessProjectChat(projectId, userId, role);
+    if (!canAccess) return { success: false };
+
     await this.prisma.message.updateMany({
       where: {
         projectId,
