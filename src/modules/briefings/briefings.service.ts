@@ -16,9 +16,44 @@ export class BriefingsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Lista todos os projetos (com briefing) do cliente autenticado.
+   */
+  async findAll(clientId: string, page = 1, limit = 10) {
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [projects, total] = await Promise.all([
+      this.prisma.project.findMany({
+        where: { clientId },
+        include: {
+          briefing: true,
+          payment: true,
+          professionalProfile: {
+            include: { user: { select: { name: true, avatarUrl: true } } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: Number(limit),
+      }),
+      this.prisma.project.count({ where: { clientId } }),
+    ]);
+
+    return {
+      data: projects,
+      meta: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / Number(limit)),
+      },
+    };
+  }
+
+  /**
    * Cria um novo projeto + briefing em uma transação atômica.
    */
   async create(clientId: string, dto: CreateBriefingDto) {
+
     return this.prisma.$transaction(async (tx) => {
       // 1. Criar o projeto
       const project = await tx.project.create({
@@ -39,7 +74,11 @@ export class BriefingsService {
           stylePreferences: dto.stylePreferences || [],
           referenceImages: dto.referenceImages || [],
           requirements: dto.requirements,
-          deadline: dto.deadline ? new Date(dto.deadline) : null,
+          deadline: (() => {
+            if (!dto.deadline) return null;
+            const d = new Date(dto.deadline);
+            return isNaN(d.getTime()) ? null : d;
+          })(),
         },
       });
 
@@ -86,7 +125,13 @@ export class BriefingsService {
         ...(dto.stylePreferences !== undefined && { stylePreferences: dto.stylePreferences }),
         ...(dto.referenceImages !== undefined && { referenceImages: dto.referenceImages }),
         ...(dto.requirements !== undefined && { requirements: dto.requirements }),
-        ...(dto.deadline !== undefined && { deadline: dto.deadline ? new Date(dto.deadline) : null }),
+        ...(dto.deadline !== undefined && {
+          deadline: (() => {
+            if (!dto.deadline) return null;
+            const d = new Date(dto.deadline);
+            return isNaN(d.getTime()) ? null : d;
+          })(),
+        }),
       },
     });
   }

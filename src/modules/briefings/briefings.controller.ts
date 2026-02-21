@@ -1,5 +1,5 @@
-import { Controller, Post, Patch, Get, Delete, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Patch, Get, Delete, Body, Param, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { BriefingsService } from './briefings.service';
 import { CreateBriefingDto, UpdateBriefingDto } from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -16,6 +16,22 @@ import { AuthenticatedUser } from '../../common/interfaces/auth.interface';
 @Controller('briefings')
 export class BriefingsController {
   constructor(private readonly briefingsService: BriefingsService) {}
+
+  /**
+   * GET /api/v1/briefings — Lista todos os briefings do cliente autenticado
+   */
+  @Get()
+  @Roles(Role.CLIENT)
+  @ApiOperation({ summary: 'Listar meus briefings (projetos)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.briefingsService.findAll(user.id, page, limit);
+  }
 
   /**
    * POST /api/v1/briefings — Cria projeto + briefing
