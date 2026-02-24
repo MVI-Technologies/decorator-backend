@@ -76,6 +76,13 @@ export class BriefingsService {
           requirements: dto.requirements,
           deadline: (() => {
             if (!dto.deadline) return null;
+            // If the value is a plain number (e.g. "7", "15", "30"), treat as days from now
+            const days = Number(dto.deadline);
+            if (!isNaN(days) && days > 0) {
+              const d = new Date();
+              d.setDate(d.getDate() + days);
+              return d;
+            }
             const d = new Date(dto.deadline);
             return isNaN(d.getTime()) ? null : d;
           })(),
@@ -128,6 +135,12 @@ export class BriefingsService {
         ...(dto.deadline !== undefined && {
           deadline: (() => {
             if (!dto.deadline) return null;
+            const days = Number(dto.deadline);
+            if (!isNaN(days) && days > 0) {
+              const d = new Date();
+              d.setDate(d.getDate() + days);
+              return d;
+            }
             const d = new Date(dto.deadline);
             return isNaN(d.getTime()) ? null : d;
           })(),
