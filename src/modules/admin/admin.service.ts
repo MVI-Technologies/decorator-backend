@@ -301,10 +301,12 @@ export class AdminService {
 
   /**
    * Admin marca que recebeu o pagamento PIX do cliente (PENDING → IN_ESCROW).
+   * Projeto → IN_PROGRESS (profissional pode entregar a partir daí).
    */
   async markPaymentReceived(paymentId: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
+      include: { project: true },
     });
     if (!payment) throw new NotFoundException('Pagamento não encontrado');
     if (payment.status !== 'PENDING') {
@@ -312,13 +314,21 @@ export class AdminService {
         'Só é possível marcar recebimento em pagamentos com status PENDING',
       );
     }
-    return this.prisma.payment.update({
-      where: { id: paymentId },
-      data: {
-        status: 'IN_ESCROW',
-        escrowStartedAt: new Date(),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'IN_ESCROW',
+          escrowStartedAt: new Date(),
+        },
+      }),
+      this.prisma.project.update({
+        where: { id: payment.projectId },
+        data: { status: 'IN_PROGRESS' },
+      }),
+    ]);
+    this.logger.log(`Pagamento ${paymentId} recebido; projeto ${payment.projectId} → IN_PROGRESS`);
+    return this.prisma.payment.findUnique({ where: { id: paymentId } });
   }
 
   /**

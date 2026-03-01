@@ -480,7 +480,8 @@ export class ProjectsService {
 
   /**
    * Cliente aceita ou recusa proposta.
-   * Aceitar: proposta → ACCEPTED, projeto → PROFESSIONAL_ASSIGNED (e payment criado depois pelo fluxo de assign).
+   * Aceitar: proposta → ACCEPTED, projeto → PROFESSIONAL_ASSIGNED, cria pagamento PENDING.
+   * Projeto só vai para IN_PROGRESS quando admin confirmar recebimento PIX (mark-received).
    * Recusar: proposta → DECLINED, projeto permanece NEGOCIANDO.
    */
   async respondToProposal(proposalId: string, userId: string, dto: RespondProposalDto) {
@@ -502,21 +503,33 @@ export class ProjectsService {
     }
 
     if (dto.action === 'accept') {
-      await this.prisma.$transaction([
-        this.prisma.proposal.update({
+      const platformFee = Math.round(proposal.price * this.platformFeeRate * 100) / 100;
+      const professionalAmount = Math.round((proposal.price - platformFee) * 100) / 100;
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.proposal.update({
           where: { id: proposalId },
           data: { status: 'ACCEPTED' },
-        }),
-        this.prisma.project.update({
+        });
+        await tx.project.update({
           where: { id: proposal.projectId },
           data: {
             status: 'PROFESSIONAL_ASSIGNED',
             price: proposal.price,
             packageType: proposal.packageType ?? undefined,
           },
-        }),
-      ]);
-      this.logger.log(`Proposta ${proposalId} aceita; projeto ${proposal.projectId} → PROFESSIONAL_ASSIGNED`);
+        });
+        await tx.payment.create({
+          data: {
+            projectId: proposal.projectId,
+            amount: proposal.price,
+            platformFee,
+            professionalAmount,
+            status: 'PENDING',
+          },
+        });
+      });
+      this.logger.log(`Proposta ${proposalId} aceita; projeto ${proposal.projectId} → PROFESSIONAL_ASSIGNED (pagamento PENDING criado)`);
     } else {
       await this.prisma.proposal.update({
         where: { id: proposalId },
