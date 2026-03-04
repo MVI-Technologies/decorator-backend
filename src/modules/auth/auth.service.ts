@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupabaseService } from './supabase.service';
-import { SignUpDto, SignInDto, ForgotPasswordDto } from './dto';
+import { SignUpDto, SignInDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { Role } from '../../common/enums/role.enum';
 import { toAbsoluteAvatarUrl } from '../../common/utils/avatar-url.util';
 
@@ -164,12 +164,47 @@ export class AuthService {
    */
   async forgotPassword(dto: ForgotPasswordDto) {
     try {
-      await this.supabaseService.resetPassword(dto.email);
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
+      await this.supabaseService.resetPassword(dto.email, frontendUrl);
       return { message: 'Se o email existir, um link de recuperação será enviado.' };
     } catch (error) {
       this.logger.error(`Erro no reset: ${(error as Error).message}`);
-      // Não revelar se o email existe ou não (segurança)
       return { message: 'Se o email existir, um link de recuperação será enviado.' };
+    }
+  }
+
+  /**
+   * Redefine a senha do usuário usando o accessToken recebido no link do email.
+   */
+  async updatePassword(dto: ResetPasswordDto) {
+    try {
+      // Decodificar o payload do JWT sem validar assinatura/expiração
+      // O token de recuperação do Supabase contém o sub (userId) que precisamos
+      const parts = dto.accessToken.split('.');
+      if (parts.length !== 3) {
+        throw new Error('Token inválido');
+      }
+      const payload = JSON.parse(
+        Buffer.from(parts[1], 'base64url').toString('utf8'),
+      ) as { sub?: string };
+
+      const supabaseUserId = payload.sub;
+      if (!supabaseUserId) {
+        throw new Error('Token sem identificação de usuário');
+      }
+
+      const { data, error } = await this.supabaseService
+        .getAdminClient()
+        .auth.admin.updateUserById(supabaseUserId, { password: dto.newPassword });
+
+      if (error || !data) {
+        throw new Error(error?.message ?? 'Erro ao redefinir senha');
+      }
+
+      return { message: 'Senha redefinida com sucesso! Faça login com sua nova senha.' };
+    } catch (error) {
+      this.logger.error(`Erro ao redefinir senha: ${(error as Error).message}`);
+      throw new Error('Token inválido ou expirado. Solicite um novo link de recuperação.');
     }
   }
 

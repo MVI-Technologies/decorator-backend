@@ -1,7 +1,7 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Patch, Get, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { SignUpDto, SignInDto, ForgotPasswordDto } from './dto';
+import { SignUpDto, SignInDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/auth.interface';
@@ -54,6 +54,20 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Email de recuperação enviado' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
+  }
+
+  /**
+   * PATCH /api/v1/auth/reset-password
+   * Redefine a senha usando o token recebido por email.
+   */
+  @Public()
+  @Patch('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Redefinir senha com token do email' })
+  @ApiResponse({ status: 200, description: 'Senha redefinida com sucesso' })
+  @ApiResponse({ status: 400, description: 'Token inválido ou expirado' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.updatePassword(dto);
   }
 
   /**

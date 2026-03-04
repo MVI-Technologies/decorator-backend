@@ -80,8 +80,11 @@ export class SupabaseService {
   /**
    * Envia email de recuperação de senha.
    */
-  async resetPassword(email: string) {
-    const { error } = await this.client.auth.resetPasswordForEmail(email);
+  async resetPassword(email: string, frontendUrl: string) {
+    const redirectTo = `${frontendUrl}/redefinir-senha`;
+    const { error } = await this.client.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
 
     if (error) {
       this.logger.error(`Erro no reset password: ${error.message}`);
