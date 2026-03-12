@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsInt, Min } from 'class-validator';
+import { IsOptional, IsString, IsInt, Min, Matches, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -60,4 +61,21 @@ export class UpdateProfessionalProfileDto {
   @IsOptional()
   @IsString()
   pixKey?: string;
+
+  @ApiPropertyOptional({ description: 'Instagram handle (@username)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => {
+    if (!value) return value;
+    let clean = value.trim();
+    if (clean.includes('instagram.com/')) {
+      clean = clean.split('instagram.com/').pop().replace(/\//g, '');
+    }
+    return clean.replace('@', '');
+  })
+  @Matches(/^[a-zA-Z0-9._]+$/, {
+    message: 'Formato de usuário do Instagram inválido',
+  })
+  instagram?: string;
 }

@@ -10,6 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { ChatService } from './chat.service';
+import { MessageContentValidator } from './message-validator.service';
 
 /**
  * Gateway WebSocket para chat em tempo real.
@@ -29,7 +30,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(ChatGateway.name);
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly messageValidator: MessageContentValidator,
+  ) {}
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
@@ -69,6 +73,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       fileType?: string;
     },
   ) {
+    if (data.content) {
+      this.messageValidator.validate(data.content);
+    }
+
     const message = await this.chatService.createMessage(
       data.projectId,
       data.senderId,
