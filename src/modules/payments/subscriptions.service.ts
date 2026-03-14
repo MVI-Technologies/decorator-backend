@@ -53,50 +53,71 @@ export class SubscriptionsService {
    * Inicia ou recupera o link para assinar (Checkout Bricks / Pro Assinaturas).
    */
   async subscribe(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { professionalProfile: true },
-    });
-
-    if (!user || !user.professionalProfile) {
-      throw new NotFoundException('Profissional não encontrado');
-    }
-
-    const profile = user.professionalProfile;
-
-    // Se já tiver uma assinatura ativa e válida
-    if (
-      (profile as any).subscriptionStatus === 'ACTIVE' &&
-      (profile as any).subscriptionExpiresAt &&
-      (profile as any).subscriptionExpiresAt > new Date()
-    ) {
-      throw new BadRequestException('Sua assinatura já está ativa.');
-    }
-
-    // 1. Verificar configuração do valor
-    const config = await this.getSubscriptionConfig();
-    
-    // 2. Se já existe um plano MP guardado numa "chave global" ou criamos aqui por demanda
-    // Vamos criar ou tentar reaproveitar do profile se possível, mas ideal é ter um plano fixo do sistema.
-    // Como simplificação, criaremos um plano para esse Request (ou na real, a API permite criar plan todo hora).
-    let planId = (profile as any).mpPreapprovalPlanId;
-    if (!planId) {
-      planId = await this.mercadoPagoService.createSubscriptionPlan(config.monthlyFee);
-      // Salva o planId no profile
-      await this.prisma.professionalProfile.update({
-        where: { id: profile.id },
-        data: { mpPreapprovalPlanId: planId } as any,
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { professionalProfile: true },
       });
+
+      if (!user || !user.professionalProfile) {
+        throw new NotFoundException('Profissional não encontrado');
+      }
+
+      const profile = user.professionalProfile;
+
+      // Se já tiver uma assinatura ativa e válida
+      if (
+        (profile as any).subscriptionStatus === 'ACTIVE' &&
+        (profile as any).subscriptionExpiresAt &&
+        (profile as any).subscriptionExpiresAt > new Date()
+      ) {
+        throw new BadRequestException('Sua assinatura já está ativa.');
+      }
+
+      // 1. Verificar configuração do valor
+      const config = await this.getSubscriptionConfig();
+      
+      // 2. Se já existe um plano MP guardado numa "chave global" ou criamos aqui por demanda
+      // Vamos criar ou tentar reaproveitar do profile se possível, mas ideal é ter um plano fixo do sistema.
+      // Como simplificação, criaremos um plano para esse Request (ou na real, a API permite criar plan todo hora).
+      let planId = (profile as any).mpPreapprovalPlanId;
+      if (!planId) {
+        planId = await this.mercadoPagoService.createSubscriptionPlan(config.monthlyFee);
+        // Salva o planId no profile
+        await this.prisma.professionalProfile.update({
+          where: { id: profile.id },
+          data: { mpPreapprovalPlanId: planId } as any,
+        });
+      }
+
+      // 3. Criar a assinatura (PreApprovalLink)
+      let result;
+      try {
+        result = await this.mercadoPagoService.createSubscriptionLink(
+          planId,
+          profile.id,
+          user.email,
+        );
+      } catch (e: any) {
+        console.error('------- MERCADO PAGO API ERROR -------');
+        console.error(e.message);
+        if (e.response && e.response.data) {
+           console.error(JSON.stringify(e.response.data, null, 2));
+        } else {
+           console.error(e);
+        }
+        throw e;
+      }
+
+      return { checkoutUrl: result.checkoutUrl };
+    } catch (err: any) {
+      console.error('------- SUBSCRIBE GENERAL ERROR -------');
+      console.error(err);
+      if (err.response) {
+        console.error(err.response.data || err.response);
+      }
+      throw err;
     }
-
-    // 3. Criar a assinatura (PreApprovalLink)
-    const result = await this.mercadoPagoService.createSubscriptionLink(
-      planId,
-      profile.id,
-      user.email,
-    );
-
-    return { checkoutUrl: result.checkoutUrl };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -113,10 +134,18 @@ export class SubscriptionsService {
       const subscription = await this.mercadoPagoService.getSubscription(subscriptionId);
 
       // subscription.payer_id, subscription.status, subscription.external_reference
-      const profileId = subscription.external_reference;
+      let profileId = subscription.external_reference;
       
+      const planId = (subscription as any).preapproval_plan_id;
+      if (!profileId && planId) {
+        const profileByPlan = await this.prisma.professionalProfile.findFirst({
+          where: { mpPreapprovalPlanId: planId } as any,
+        });
+        if (profileByPlan) profileId = profileByPlan.id;
+      }
+
       if (!profileId) {
-        this.logger.warn(`Assinatura ${subscriptionId} sem external_reference.`);
+        this.logger.warn(`Assinatura ${subscriptionId} do plano ${planId} sem profissional associado.`);
         return;
       }
 

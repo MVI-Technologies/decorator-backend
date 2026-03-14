@@ -11,7 +11,7 @@ import { SupabaseService } from './supabase.service';
 import { SignUpDto, SignInDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { Role } from '../../common/enums/role.enum';
 import { toAbsoluteAvatarUrl } from '../../common/utils/avatar-url.util';
-
+import { generatePublicId } from '../../common/utils/public-id.util';
 /**
  * Service de autenticação.
  * Orquestra o Supabase Auth e o Prisma para gerenciar
@@ -69,6 +69,7 @@ export class AuthService {
           await tx.clientProfile.create({
             data: {
               userId: newUser.id,
+              publicId: generatePublicId('C', clientCount),
             },
           });
         } else if (dto.role === Role.PROFESSIONAL) {
@@ -77,6 +78,7 @@ export class AuthService {
             data: {
               userId: newUser.id,
               displayName: dto.name,
+              publicId: generatePublicId('P', professionalCount),
             },
           });
         }

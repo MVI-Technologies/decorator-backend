@@ -1,0 +1,65 @@
+{
+  "id": "d6086cebb25742ea97d7087172ad0ffe",
+  "back_url": "https://decorador-net-studio.vercel.app/app/configuracoes/assinatura",
+  "collector_id": 323913758,
+  "application_id": 5890694430679314,
+  "reason": "Assinatura Decorador.net - Profissional",
+  "status": "active",
+  "date_created": "2026-03-14T16:21:36.419-04:00",
+  "last_modified": "2026-03-14T16:21:36.419-04:00",
+  "init_point": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=d6086cebb25742ea97d7087172ad0ffe",
+  "auto_recurring": {
+    "frequency": 1,
+    "frequency_type": "months",
+    "transaction_amount": 21.9,
+    "currency_id": "BRL"
+  },
+  "payment_methods_allowed": {},
+  "api_response": {
+    "status": 201,
+    "headers": {
+      "date": [
+        "Sat, 14 Mar 2026 20:21:36 GMT"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "transfer-encoding": [
+        "chunked"
+      ],
+      "connection": [
+        "keep-alive"
+      ],
+      "x-request-id": [
+        "69239c4c-9b1d-4003-8090-3a689824a1f0"
+      ],
+      "x-api-server-segment": [
+        "legacy"
+      ],
+      "x-content-type-options": [
+        "nosniff"
+      ],
+      "x-xss-protection": [
+        "1; mode=block"
+      ],
+      "strict-transport-security": [
+        "max-age=16070400; includeSubDomains; preload, max-age=31536000; includeSubDomains"
+      ],
+      "access-control-allow-origin": [
+        "*"
+      ],
+      "access-control-allow-headers": [
+        "Content-Type"
+      ],
+      "access-control-allow-methods": [
+        "PUT, GET, POST, DELETE, OPTIONS"
+      ],
+      "access-control-max-age": [
+        "86400"
+      ],
+      "timing-allow-origin": [
+        "*"
+      ]
+    }
+  }
+}

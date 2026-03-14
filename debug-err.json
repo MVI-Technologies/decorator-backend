@@ -1,0 +1,10 @@
+{
+  "message": "Profissional não encontrado",
+  "name": "NotFoundException",
+  "stack": "NotFoundException: Profissional não encontrado\n    at SubscriptionsService.subscribe (C:\\Users\\victo\\OneDrive\\Área de Trabalho\\Portfolio-Projects\\decorator\\src\\modules\\payments\\subscriptions.service.ts:63:15)\n    at async run (C:\\Users\\victo\\OneDrive\\Área de Trabalho\\Portfolio-Projects\\decorator\\debug-subscription.ts:23:20)",
+  "response": {
+    "message": "Profissional não encontrado",
+    "error": "Not Found",
+    "statusCode": 404
+  }
+}

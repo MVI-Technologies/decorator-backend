@@ -49,6 +49,7 @@ export class ProfessionalsService {
       bankAgency,
       bankAccount,
       pixKey,
+      instagram,
       ...publicProfile
     } = profile;
     return publicProfile;

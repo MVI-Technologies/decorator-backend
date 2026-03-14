@@ -186,22 +186,16 @@ export class MercadoPagoService {
    * Cria o link de pagamento de assinatura (PreApproval) para um usuário específico.
    */
   async createSubscriptionLink(planId: string, professionalId: string, email: string) {
-    const backendUrl = this.configService.get<string>('APP_URL', 'http://localhost:3000');
-    
-    // Opcional, em alguns SDKs a configuração pode estar direto no body
-    const response = await this.preApproval.create({
-      body: {
-        preapproval_plan_id: planId,
-        payer_email: email,
-        back_url: `${this.frontendUrl}/app/configuracoes/assinatura?success=true`,
-        reason: 'Assinatura Mensal Decorador.net',
-        external_reference: professionalId,
-      },
-    });
+    // Busca os dados do plano para pegar a URL genérica de checkout dele
+    const plan = await (this.preApprovalPlan as any).get({ id: planId });
+
+    if (!plan.init_point) {
+      throw new Error(`Plano MP sem init_point gerado. ID: ${planId}`);
+    }
 
     return {
-      subscriptionId: response.id!,
-      checkoutUrl: response.init_point!,
+      subscriptionId: planId,
+      checkoutUrl: plan.init_point,
     };
   }
 

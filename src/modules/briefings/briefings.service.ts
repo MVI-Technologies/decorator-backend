@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateBriefingDto, UpdateBriefingDto } from './dto';
+import { generatePublicId } from '../../common/utils/public-id.util';
 
 /**
  * Service de Briefings.
@@ -55,10 +56,13 @@ export class BriefingsService {
   async create(clientId: string, dto: CreateBriefingDto) {
 
     return this.prisma.$transaction(async (tx) => {
+      // 1. Criar o projeto (com publicId sequencia l #Axxx)
+      const projectCount = await tx.project.count();
       const project = await tx.project.create({
         data: {
           clientId,
           title: dto.projectTitle,
+          publicId: generatePublicId('A', projectCount),
         },
       });
 

@@ -37,6 +37,7 @@ model User {
 model ClientProfile {
   id                  String   @id @default(uuid())
   userId              String   @unique @map("user_id")
+  publicId            String?  @unique @map("public_id")
   address             String?
   city                String?
   state               String?
@@ -55,6 +56,7 @@ model ClientProfile {
 model ProfessionalProfile {
   id                    String                         @id @default(uuid())
   userId                String                         @unique @map("user_id")
+  publicId              String?                        @unique @map("public_id")
   displayName           String                         @map("display_name")
   bio                   String?
   cpfCnpj               String?                        @map("cpf_cnpj")
@@ -69,6 +71,7 @@ model ProfessionalProfile {
   bankAgency            String?                        @map("bank_agency")
   bankAccount           String?                        @map("bank_account")
   pixKey                String?                        @map("pix_key")
+  instagram             String?
   createdAt             DateTime                       @default(now()) @map("created_at")
   updatedAt             DateTime                       @updatedAt @map("updated_at")
   subscriptionStatus    ProfessionalSubscriptionStatus @default(INACTIVE) @map("subscription_status")
@@ -124,6 +127,7 @@ model Project {
   id                     String               @id @default(uuid())
   clientId               String               @map("client_id")
   professionalProfileId  String?              @map("professional_profile_id")
+  publicId               String?              @unique @map("public_id")
   title                  String
   status                 ProjectStatus        @default(BRIEFING_SUBMITTED)
   packageType            String?              @map("package_type")
