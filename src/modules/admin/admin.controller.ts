@@ -108,7 +108,7 @@ export class AdminController {
 
   @Patch('settings/platform')
   @ApiOperation({ summary: 'Atualizar configurações de negócio da plataforma' })
-  async updatePlatformConfigs(@Body() dto: { professionalMonthlyFee?: number; platformFeePercentage?: number }) {
+  async updatePlatformConfigs(@Body() dto: { professionalMonthlyFee?: number; platformFeePercentage?: number; maxInstallments?: number }) {
     return this.adminService.updatePlatformConfigs(dto);
   }
 

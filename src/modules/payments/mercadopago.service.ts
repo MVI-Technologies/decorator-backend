@@ -15,6 +15,7 @@ export interface CreatePreferenceParams {
   clientName: string;
   clientEmail: string;
   clientPhone?: string;
+  installmentsLimit?: number;
 }
 
 export interface PreferenceResult {
@@ -103,8 +104,8 @@ export class MercadoPagoService {
         payment_methods: {
           // Permite todos os métodos: PIX, débito e crédito
           excluded_payment_types: [],
-          // Máximo de parcelas para cartão de crédito
-          installments: 12,
+          // Máximo de parcelas para cartão de crédito (vinda das configs do admin, default 12)
+          installments: params.installmentsLimit ?? 12,
           // Parcelas sem acréscimo (definido pela loja/conta MP)
           default_installments: 1,
         },

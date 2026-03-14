@@ -919,9 +919,15 @@ export class ProjectsService {
       );
     }
 
+    // Buscar config de máximo de parcelas permitidas
+    const maxInstallmentsConfig = await this.prisma.systemConfig.findUnique({
+      where: { key: 'MAX_INSTALLMENTS' },
+    });
+    const installmentsLimit = maxInstallmentsConfig?.value ? parseInt(maxInstallmentsConfig.value, 10) : 12;
+
     // Criar preferência no Mercado Pago
     this.logger.log(
-      `Criando preferência MP: projeto=${projectId} profissional=${dto.professionalProfileId}`,
+      `Criando preferência MP: projeto=${projectId} profissional=${dto.professionalProfileId} maxInstallments=${installmentsLimit}`,
     );
 
     const mpResult = await this.mercadoPagoService.createPreference({
@@ -931,6 +937,7 @@ export class ProjectsService {
       clientName: project.client.name,
       clientEmail: project.client.email,
       clientPhone: project.client.phone ?? undefined,
+      installmentsLimit,
     });
 
     // Atualizar projeto em transação
