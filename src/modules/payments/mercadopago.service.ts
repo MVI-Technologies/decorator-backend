@@ -87,7 +87,7 @@ export class MercadoPagoService {
         items: [
           {
             id: projectId,
-            title: `Decorador.net - ${projectTitle}`,
+            title: `Decornet - ${projectTitle}`,
             description: `Projeto de design de interiores: ${projectTitle}`,
             quantity: 1,
             unit_price: Number(price),
@@ -130,7 +130,7 @@ export class MercadoPagoService {
           project_id: projectId,
         },
         // Identificação da plataforma
-        statement_descriptor: 'DECORADOR.NET',
+        statement_descriptor: 'DECORNET',
       },
     });
 
@@ -138,10 +138,11 @@ export class MercadoPagoService {
       `Preferência MP criada: id=${response.id} url=${response.init_point}`,
     );
 
+    const isSandbox = this.configService.get('MERCADOPAGO_ACCESS_TOKEN')?.startsWith('TEST-');
+
     return {
       preferenceId: response.id!,
-      checkoutUrl: response.init_point!, // URL de produção
-      // Para sandbox usar: response.sandbox_init_point!
+      checkoutUrl: isSandbox ? (response as any).sandbox_init_point : response.init_point!,
     };
   }
 
@@ -159,44 +160,48 @@ export class MercadoPagoService {
   /**
    * Cria um Plano de Assinatura Recorrente no Mercado Pago.
    */
-  async createSubscriptionPlan(amount: number): Promise<string> {
-    const backendUrl = this.configService.get<string>('APP_URL', 'http://localhost:3000');
-    // Notification URL base (Mercado Pago appended ?type=subscription_preapproval...)
-    const notificationUrl = `${backendUrl}/api/v1/payments/webhook/mercadopago`;
+  async createSubscriptionPlan(amount: number): Promise<{ planId: string; checkoutUrl: string }> {
+    // O Mercado Pago rejeita back_url com localhost em contas reais.
+    // Só incluímos a back_url se for uma URL pública válida.
+    const isProductionUrl = (url: string) =>
+      url.startsWith('https://') || (url.startsWith('http://') && !url.includes('localhost'));
 
-    const response = await this.preApprovalPlan.create({
-      body: {
-        reason: 'Assinatura Decorador.net - Profissional',
-        auto_recurring: {
-          frequency: 1,
-          frequency_type: 'months',
-          transaction_amount: amount,
-          currency_id: 'BRL',
-        },
-        back_url: `${this.frontendUrl}/app/configuracoes/assinatura`,
-        // notificationUrl doesn't exist explicitly in preapproval_plan but we rely on account configuration or preference webhook
+    const body: Record<string, any> = {
+      reason: 'Assinatura Decornet - Profissional',
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: amount,
+        currency_id: 'BRL',
       },
-    });
+    };
 
-    this.logger.log(`Plano de assinatura MP criado: id=${response.id}`);
-    return response.id!;
+    if (isProductionUrl(this.frontendUrl)) {
+      body.back_url = `${this.frontendUrl}/app/configuracoes/assinatura`;
+    } else {
+      this.logger.warn(
+        `FRONTEND_URL "${this.frontendUrl}" é localhost — omitindo back_url do plano MP (OK para testes).`,
+      );
+    }
+
+    const response = await this.preApprovalPlan.create({ body });
+    const checkoutUrl = response.init_point;
+
+    this.logger.log(`Plano de assinatura MP criado: id=${response.id} url=${checkoutUrl}`);
+
+    if (!checkoutUrl) {
+      throw new Error(`Plano MP criado sem url de checkout. ID: ${response.id}`);
+    }
+
+    return { planId: response.id!, checkoutUrl };
   }
 
   /**
-   * Cria o link de pagamento de assinatura (PreApproval) para um usuário específico.
+   * Retorna o link de checkout de um plano de assinatura já criado.
+   * O checkoutUrl vem direto do campo `init_point` retornado na criação do plano.
    */
-  async createSubscriptionLink(planId: string, professionalId: string, email: string) {
-    // Busca os dados do plano para pegar a URL genérica de checkout dele
-    const plan = await (this.preApprovalPlan as any).get({ id: planId });
-
-    if (!plan.init_point) {
-      throw new Error(`Plano MP sem init_point gerado. ID: ${planId}`);
-    }
-
-    return {
-      subscriptionId: planId,
-      checkoutUrl: plan.init_point,
-    };
+  async createSubscriptionLink(checkoutUrl: string, _professionalId: string, _email: string) {
+    return { checkoutUrl };
   }
 
   /**

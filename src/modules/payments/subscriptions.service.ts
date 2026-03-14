@@ -76,40 +76,18 @@ export class SubscriptionsService {
 
       // 1. Verificar configuração do valor
       const config = await this.getSubscriptionConfig();
-      
-      // 2. Se já existe um plano MP guardado numa "chave global" ou criamos aqui por demanda
-      // Vamos criar ou tentar reaproveitar do profile se possível, mas ideal é ter um plano fixo do sistema.
-      // Como simplificação, criaremos um plano para esse Request (ou na real, a API permite criar plan todo hora).
-      let planId = (profile as any).mpPreapprovalPlanId;
-      if (!planId) {
-        planId = await this.mercadoPagoService.createSubscriptionPlan(config.monthlyFee);
-        // Salva o planId no profile
-        await this.prisma.professionalProfile.update({
-          where: { id: profile.id },
-          data: { mpPreapprovalPlanId: planId } as any,
-        });
-      }
 
-      // 3. Criar a assinatura (PreApprovalLink)
-      let result;
-      try {
-        result = await this.mercadoPagoService.createSubscriptionLink(
-          planId,
-          profile.id,
-          user.email,
-        );
-      } catch (e: any) {
-        console.error('------- MERCADO PAGO API ERROR -------');
-        console.error(e.message);
-        if (e.response && e.response.data) {
-           console.error(JSON.stringify(e.response.data, null, 2));
-        } else {
-           console.error(e);
-        }
-        throw e;
-      }
+      // Sempre cria um novo plano para garantir init_point válido
+      const planResult = await this.mercadoPagoService.createSubscriptionPlan(config.monthlyFee);
 
-      return { checkoutUrl: result.checkoutUrl };
+      // Persiste o planId mais recente no profile
+      await this.prisma.professionalProfile.update({
+        where: { id: profile.id },
+        data: { mpPreapprovalPlanId: planResult.planId } as any,
+      });
+
+      this.logger.log(`[subscribe] Retornando checkoutUrl=${planResult.checkoutUrl}`);
+      return { checkoutUrl: planResult.checkoutUrl };
     } catch (err: any) {
       console.error('------- SUBSCRIBE GENERAL ERROR -------');
       console.error(err);
