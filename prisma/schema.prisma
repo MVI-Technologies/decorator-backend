@@ -139,6 +139,7 @@ model User {
 model ClientProfile {
   id                  String   @id @default(uuid())
   userId              String   @unique @map("user_id")
+  publicId            String?  @unique @map("public_id")
   address             String?
   city                String?
   state               String?
@@ -163,6 +164,7 @@ model ClientProfile {
 model ProfessionalProfile {
   id                String             @id @default(uuid())
   userId            String             @unique @map("user_id")
+  publicId          String?            @unique @map("public_id")
   displayName       String             @map("display_name")
   bio               String?
   cpfCnpj           String?            @map("cpf_cnpj")
@@ -171,6 +173,7 @@ model ProfessionalProfile {
   experienceYears   Int                @default(0) @map("experience_years")
   city              String?
   state             String?
+  instagram         String?
   averageRating     Float              @default(0) @map("average_rating")
   completedProjects Int                @default(0) @map("completed_projects")
 
@@ -263,6 +266,7 @@ model Project {
   /// Profissional selecionado pelo cliente (após negociação, antes do pagamento)
   selectedProfessionalId String?      @map("selected_professional_id")
 
+  publicId              String?       @unique @map("public_id")
   title                 String
   status                ProjectStatus @default(BRIEFING_SUBMITTED)
   packageType           String?       @map("package_type")
@@ -375,6 +379,8 @@ model Message {
   fileStoragePath String?   @map("file_storage_path") // path no bucket privado do chat (para gerar signed URL)
   fileType        FileType? @map("file_type")
   isRead          Boolean   @default(false) @map("is_read")
+  isBlocked       Boolean   @default(false) @map("is_blocked") // para rastreamento de violações
+  blockReason     String?   @map("block_reason") // o motivo, ex: 'PHONE_DETECTED'
 
   createdAt DateTime @default(now()) @map("created_at")
 

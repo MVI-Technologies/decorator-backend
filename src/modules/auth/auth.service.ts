@@ -11,6 +11,7 @@ import { SupabaseService } from './supabase.service';
 import { SignUpDto, SignInDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { Role } from '../../common/enums/role.enum';
 import { toAbsoluteAvatarUrl } from '../../common/utils/avatar-url.util';
+import { generatePublicId } from '../../common/utils/public-id.util';
 
 /**
  * Service de autenticação.
@@ -63,16 +64,22 @@ export class AuthService {
           },
         });
 
-        // 3. Criar perfil conforme a role
+        // 3. Criar perfil conforme a role (com publicId sequencial)
         if (dto.role === Role.CLIENT) {
+          const clientCount = await tx.clientProfile.count();
           await tx.clientProfile.create({
-            data: { userId: newUser.id },
+            data: {
+              userId: newUser.id,
+              publicId: generatePublicId('C', clientCount),
+            },
           });
         } else if (dto.role === Role.PROFESSIONAL) {
+          const professionalCount = await tx.professionalProfile.count();
           await tx.professionalProfile.create({
             data: {
               userId: newUser.id,
               displayName: dto.name,
+              publicId: generatePublicId('P', professionalCount),
             },
           });
         }

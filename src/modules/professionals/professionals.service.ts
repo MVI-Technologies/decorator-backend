@@ -43,7 +43,16 @@ export class ProfessionalsService {
     }
 
     // Remover dados sensíveis
-    const { cpfCnpj, documentUrl, bankName, bankAgency, bankAccount, pixKey, ...publicProfile } = profile;
+    const {
+      cpfCnpj,
+      documentUrl,
+      bankName,
+      bankAgency,
+      bankAccount,
+      pixKey,
+      instagram,
+      ...publicProfile
+    } = profile;
     return publicProfile;
   }
 
