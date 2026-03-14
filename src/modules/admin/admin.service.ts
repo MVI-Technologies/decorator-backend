@@ -13,6 +13,9 @@ import {
 
 const CONFIG_ADMIN_PIX_KEY = 'ADMIN_PIX_KEY';
 const CONFIG_ADMIN_PIX_KEY_TYPE = 'ADMIN_PIX_KEY_TYPE';
+const CONFIG_PROFESSIONAL_MONTHLY_FEE = 'PROFESSIONAL_MONTHLY_FEE';
+const CONFIG_PLATFORM_FEE_PERCENTAGE = 'PLATFORM_FEE_PERCENTAGE';
+const CONFIG_MAX_INSTALLMENTS = 'MAX_INSTALLMENTS';
 
 /**
  * Service Admin.
@@ -277,6 +280,69 @@ export class AdminService {
     ]);
     this.logger.log('Chave PIX do admin atualizada');
     return this.getAdminPixSettings();
+  }
+
+  // ─── CONFIGURAÇÕES DA PLATAFORMA (TAXAS E MENSALIDADES) ───────────────────
+
+  /**
+   * Retorna as configurações de negócio e taxas da plataforma
+   */
+  async getPlatformConfigs() {
+    const [monthlyFee, platformFee, maxInstallments] = await Promise.all([
+      this.prisma.systemConfig.findUnique({ where: { key: CONFIG_PROFESSIONAL_MONTHLY_FEE } }),
+      this.prisma.systemConfig.findUnique({ where: { key: CONFIG_PLATFORM_FEE_PERCENTAGE } }),
+      this.prisma.systemConfig.findUnique({ where: { key: CONFIG_MAX_INSTALLMENTS } }),
+    ]);
+
+    return {
+      professionalMonthlyFee: monthlyFee?.value ? parseFloat(monthlyFee.value) : 21.90,
+      platformFeePercentage: platformFee?.value ? parseFloat(platformFee.value) : 15,
+      maxInstallments: maxInstallments?.value ? parseInt(maxInstallments.value, 10) : 12,
+    };
+  }
+
+  /**
+   * Atualiza as configurações de negócio da plataforma
+   */
+  async updatePlatformConfigs(dto: { professionalMonthlyFee?: number; platformFeePercentage?: number; maxInstallments?: number }) {
+    const transactions = [];
+
+    if (dto.professionalMonthlyFee !== undefined) {
+      transactions.push(
+        this.prisma.systemConfig.upsert({
+          where: { key: CONFIG_PROFESSIONAL_MONTHLY_FEE },
+          create: { key: CONFIG_PROFESSIONAL_MONTHLY_FEE, value: dto.professionalMonthlyFee.toString() },
+          update: { value: dto.professionalMonthlyFee.toString() },
+        })
+      );
+    }
+
+    if (dto.platformFeePercentage !== undefined) {
+      transactions.push(
+        this.prisma.systemConfig.upsert({
+          where: { key: CONFIG_PLATFORM_FEE_PERCENTAGE },
+          create: { key: CONFIG_PLATFORM_FEE_PERCENTAGE, value: dto.platformFeePercentage.toString() },
+          update: { value: dto.platformFeePercentage.toString() },
+        })
+      );
+    }
+
+    if (dto.maxInstallments !== undefined) {
+      transactions.push(
+        this.prisma.systemConfig.upsert({
+          where: { key: CONFIG_MAX_INSTALLMENTS },
+          create: { key: CONFIG_MAX_INSTALLMENTS, value: dto.maxInstallments.toString() },
+          update: { value: dto.maxInstallments.toString() },
+        })
+      );
+    }
+
+    if (transactions.length > 0) {
+      await this.prisma.$transaction(transactions);
+      this.logger.log('Configurações de taxas da plataforma atualizadas pelo Admin');
+    }
+
+    return this.getPlatformConfigs();
   }
 
   // ─── PAGAMENTOS MVP (cliente paga PIX → admin recebe → em 4 dias paga profissional) ───

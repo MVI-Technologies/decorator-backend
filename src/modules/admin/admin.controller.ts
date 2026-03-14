@@ -98,6 +98,20 @@ export class AdminController {
     return this.adminService.updateAdminPixSettings(dto);
   }
 
+  // ─── Configurações da Plataforma (Taxas e Mensalidades) ───
+
+  @Get('settings/platform')
+  @ApiOperation({ summary: 'Obter configurações de negócio da plataforma (mensalidade e taxa admin)' })
+  async getPlatformConfigs() {
+    return this.adminService.getPlatformConfigs();
+  }
+
+  @Patch('settings/platform')
+  @ApiOperation({ summary: 'Atualizar configurações de negócio da plataforma' })
+  async updatePlatformConfigs(@Body() dto: { professionalMonthlyFee?: number; platformFeePercentage?: number; maxInstallments?: number }) {
+    return this.adminService.updatePlatformConfigs(dto);
+  }
+
   // ─── Pagamentos MVP (recebimento e repasse ao profissional) ───
 
   @Get('payments/pending-received')
