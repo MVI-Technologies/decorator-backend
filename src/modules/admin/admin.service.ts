@@ -215,8 +215,6 @@ export class AdminService {
           role: true,
           isActive: true,
           createdAt: true,
-          clientProfile: { select: { publicId: true } },
-          professionalProfile: { select: { publicId: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip,

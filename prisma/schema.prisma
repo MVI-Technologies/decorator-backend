@@ -1,8 +1,3 @@
-// ============================================
-// Decorador.net — Schema Prisma Completo
-// 12 modelos, 7 enumerações
-// ============================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,9 +8,317 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ============================================
-// ENUMERAÇÕES
-// ============================================
+/// Usuário base da plataforma.
+/// Cada usuário possui exatamente uma role e pode ter
+/// um perfil de cliente ou de profissional (nunca ambos).
+model User {
+  id                  String               @id @default(uuid())
+  supabaseAuthId      String               @unique @map("supabase_auth_id")
+  email               String               @unique
+  name                String
+  phone               String?
+  avatarUrl           String?              @map("avatar_url")
+  role                Role                 @default(CLIENT)
+  isActive            Boolean              @default(true) @map("is_active")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  clientProfile       ClientProfile?
+  sentMessages        Message[]            @relation("MessageSender")
+  notifications       Notification[]
+  professionalProfile ProfessionalProfile?
+  uploadedFiles       ProjectFile[]        @relation("FileUploader")
+  projectsAsClient    Project[]            @relation("ClientProjects")
+
+  @@map("users")
+}
+
+/// Perfil adicional do cliente.
+/// Contém dados de endereço e preferências de estilo.
+model ClientProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  address             String?
+  city                String?
+  state               String?
+  zipCode             String?  @map("zip_code")
+  preferredStyles     String[] @default([]) @map("preferred_styles")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  onboardingCompleted Boolean  @default(false) @map("onboarding_completed")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("client_profiles")
+}
+
+/// Perfil do profissional de design de interiores.
+/// Inclui dados de verificação, financeiro e métricas.
+model ProfessionalProfile {
+  id                    String                         @id @default(uuid())
+  userId                String                         @unique @map("user_id")
+  displayName           String                         @map("display_name")
+  bio                   String?
+  cpfCnpj               String?                        @map("cpf_cnpj")
+  documentUrl           String?                        @map("document_url")
+  status                ProfessionalStatus             @default(PENDING_APPROVAL)
+  experienceYears       Int                            @default(0) @map("experience_years")
+  city                  String?
+  state                 String?
+  averageRating         Float                          @default(0) @map("average_rating")
+  completedProjects     Int                            @default(0) @map("completed_projects")
+  bankName              String?                        @map("bank_name")
+  bankAgency            String?                        @map("bank_agency")
+  bankAccount           String?                        @map("bank_account")
+  pixKey                String?                        @map("pix_key")
+  createdAt             DateTime                       @default(now()) @map("created_at")
+  updatedAt             DateTime                       @updatedAt @map("updated_at")
+  subscriptionStatus    ProfessionalSubscriptionStatus @default(INACTIVE) @map("subscription_status")
+  subscriptionExpiresAt DateTime?                      @map("subscription_expires_at")
+  mpSubscriptionId      String?                        @map("mp_subscription_id")
+  mpPreapprovalPlanId   String?                        @map("mp_preapproval_plan_id")
+  portfolioItems        PortfolioItem[]
+  user                  User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  styles                ProfessionalStyle[]
+  projects              Project[]                      @relation("ProfessionalProjects")
+  proposals             Proposal[]
+  withdrawals           Withdrawal[]
+
+  @@map("professional_profiles")
+}
+
+/// Estilo de design que o profissional oferece.
+/// Usado para matching com preferências do cliente.
+model ProfessionalStyle {
+  id                    String              @id @default(uuid())
+  professionalProfileId String              @map("professional_profile_id")
+  name                  String
+  description           String?
+  createdAt             DateTime            @default(now()) @map("created_at")
+  professionalProfile   ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+
+  @@map("professional_styles")
+}
+
+/// Item do portfólio do profissional.
+/// Exibido no perfil público para atrair clientes.
+/// Suporta imagem, documento (PDF/Word) ou link externo (site).
+model PortfolioItem {
+  id                    String              @id @default(uuid())
+  professionalProfileId String              @map("professional_profile_id")
+  title                 String
+  description           String?
+  imageUrl              String              @map("image_url")
+  category              String?
+  order                 Int                 @default(0)
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  documentUrl           String?             @map("document_url")
+  linkUrl               String?             @map("link_url")
+  professionalProfile   ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+
+  @@map("portfolio_items")
+}
+
+/// Projeto de design de interiores.
+/// Representa o ciclo completo: briefing → matching → execução → entrega → aprovação.
+model Project {
+  id                     String               @id @default(uuid())
+  clientId               String               @map("client_id")
+  professionalProfileId  String?              @map("professional_profile_id")
+  title                  String
+  status                 ProjectStatus        @default(BRIEFING_SUBMITTED)
+  packageType            String?              @map("package_type")
+  price                  Float?
+  startedAt              DateTime?            @map("started_at")
+  completedAt            DateTime?            @map("completed_at")
+  revisionsUsed          Int                  @default(0) @map("revisions_used")
+  maxRevisions           Int                  @default(3) @map("max_revisions")
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
+  /// Profissional selecionado pelo cliente (após negociação, antes do pagamento)
+  selectedProfessionalId String?              @map("selected_professional_id")
+  /// ID da preferência de pagamento criada na API do MP
+  paymentPreferenceId    String?              @map("payment_preference_id")
+  /// URL de checkout para redirecionar o cliente ao MP
+  paymentCheckoutUrl     String?              @map("payment_checkout_url")
+  /// ID do pagamento efetivado (após webhook de aprovação)
+  paymentId              String?              @map("payment_id")
+  /// Status do pagamento retornado pelo MP (pending | approved | rejected | ...)
+  paymentStatus          String?              @map("payment_status")
+  /// Método de pagamento (pix | credit_card | debit_card | account_money)
+  paymentMethod          String?              @map("payment_method")
+  /// Número de parcelas do cartão de crédito
+  installments           Int?                 @map("installments")
+  /// Valor efetivamente transacionado (pode diferir de price em caso de desconto MP)
+  transactionAmount      Float?               @map("transaction_amount")
+  briefing               Briefing?
+  messages               Message[]
+  payment                Payment?
+  files                  ProjectFile[]
+  client                 User                 @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
+  professionalProfile    ProfessionalProfile? @relation("ProfessionalProjects", fields: [professionalProfileId], references: [id])
+  proposals              Proposal[]
+  review                 Review?
+
+  @@map("projects")
+}
+
+/// Proposta enviada pelo profissional ao cliente (valor, escopo, prazo).
+/// Uma proposta PENDING mostra o card "Aceitar/Recusar"; ACCEPTED/DECLINED para histórico.
+model Proposal {
+  id                    String              @id @default(uuid())
+  projectId             String              @map("project_id")
+  professionalProfileId String              @map("professional_profile_id")
+  price                 Float
+  status                ProposalStatus      @default(PENDING)
+  packageType           String?             @map("package_type")
+  estimatedDays         Int?                @map("estimated_days")
+  notes                 String?
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  professionalProfile   ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  project               Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@map("proposals")
+}
+
+/// Briefing do projeto, preenchido pelo cliente.
+/// Contém os requisitos, preferências e referências visuais.
+model Briefing {
+  id               String    @id @default(uuid())
+  projectId        String    @unique @map("project_id")
+  roomType         String?   @map("room_type")
+  roomSize         String?   @map("room_size")
+  budget           Float?
+  description      String?
+  stylePreferences String[]  @default([]) @map("style_preferences")
+  referenceImages  String[]  @default([]) @map("reference_images")
+  requirements     String?
+  deadline         DateTime?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("briefings")
+}
+
+/// Mensagem do chat de um projeto.
+/// Suporta texto e arquivos anexados.
+model Message {
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  senderId        String    @map("sender_id")
+  content         String
+  fileUrl         String?   @map("file_url")
+  fileType        FileType? @map("file_type")
+  isRead          Boolean   @default(false) @map("is_read")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  fileStoragePath String?   @map("file_storage_path")
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sender          User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("messages")
+}
+
+/// Arquivo do projeto (entregáveis, referências, documentos).
+/// Usado para uploads de entregáveis pelo profissional e referências pelo cliente.
+model ProjectFile {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  uploadedById  String   @map("uploaded_by_id")
+  fileName      String   @map("file_name")
+  fileUrl       String   @map("file_url")
+  fileType      FileType @default(OTHER) @map("file_type")
+  description   String?
+  isDeliverable Boolean  @default(false) @map("is_deliverable")
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at")
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy    User     @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@map("project_files")
+}
+
+/// Registro de pagamento com escrow simulado.
+/// platformFee = 15% do amount; professionalAmount = 85%.
+model Payment {
+  id                 String        @id @default(uuid())
+  projectId          String        @unique @map("project_id")
+  amount             Float
+  platformFee        Float         @map("platform_fee")
+  professionalAmount Float         @map("professional_amount")
+  status             PaymentStatus @default(PENDING)
+  escrowStartedAt    DateTime?     @map("escrow_started_at")
+  releasedAt         DateTime?     @map("released_at")
+  refundedAt         DateTime?     @map("refunded_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+/// Solicitação de saque do profissional.
+/// Processada manualmente pelo admin no MVP.
+model Withdrawal {
+  id                    String              @id @default(uuid())
+  professionalProfileId String              @map("professional_profile_id")
+  amount                Float
+  status                WithdrawalStatus    @default(REQUESTED)
+  adminNotes            String?             @map("admin_notes")
+  requestedAt           DateTime            @default(now()) @map("requested_at")
+  processedAt           DateTime?           @map("processed_at")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  professionalProfile   ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+
+  @@map("withdrawals")
+}
+
+/// Avaliação pós-projeto feita pelo cliente sobre o profissional.
+/// Moderada pelo admin antes de ser publicada.
+model Review {
+  id        String   @id @default(uuid())
+  projectId String   @unique @map("project_id")
+  rating    Int
+  comment   String?
+  isPublic  Boolean  @default(true) @map("is_public")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+/// Notificação do sistema.
+/// Pode ser in-app ou disparar e-mail (estrutura futura).
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+/// Configurações gerais do sistema (ex: chave PIX do admin para receber pagamentos MVP).
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
 
 /// Roles do sistema
 enum Role {
@@ -36,7 +339,6 @@ enum ProfessionalStatus {
 enum ProjectStatus {
   BRIEFING_SUBMITTED
   MATCHING
-  NEGOCIANDO
   PROFESSIONAL_ASSIGNED
   AWAITING_PAYMENT
   IN_PROGRESS
@@ -45,6 +347,7 @@ enum ProjectStatus {
   APPROVED
   COMPLETED
   CANCELLED
+  NEGOCIANDO
 }
 
 /// Status do pagamento / escrow
@@ -97,437 +400,3 @@ enum ProposalStatus {
   DECLINED
   NEGOTIATING
 }
-
-// ============================================
-// MODELO 1 — User (base)
-// ============================================
-
-/// Usuário base da plataforma.
-/// Cada usuário possui exatamente uma role e pode ter
-/// um perfil de cliente ou de profissional (nunca ambos).
-model User {
-  id             String   @id @default(uuid())
-  supabaseAuthId String   @unique @map("supabase_auth_id")
-  email          String   @unique
-  name           String
-  phone          String?
-  avatarUrl      String?  @map("avatar_url")
-  role           Role     @default(CLIENT)
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  // Relações 1:1 com perfis
-  clientProfile       ClientProfile?
-  professionalProfile ProfessionalProfile?
-
-  // Relações 1:N
-  projectsAsClient Project[]      @relation("ClientProjects")
-  sentMessages     Message[]      @relation("MessageSender")
-  uploadedFiles    ProjectFile[]  @relation("FileUploader")
-  notifications    Notification[]
-
-  @@map("users")
-}
-
-// ============================================
-// MODELO 2 — ClientProfile
-// ============================================
-
-/// Perfil adicional do cliente.
-/// Contém dados de endereço e preferências de estilo.
-model ClientProfile {
-  id                  String   @id @default(uuid())
-  userId              String   @unique @map("user_id")
-  publicId            String?  @unique @map("public_id")
-  address             String?
-  city                String?
-  state               String?
-  zipCode             String?  @map("zip_code")
-  preferredStyles     String[] @default([]) @map("preferred_styles")
-  onboardingCompleted Boolean  @default(false) @map("onboarding_completed")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-
-  // Relação 1:1 com User
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("client_profiles")
-}
-
-// ============================================
-// MODELO 3 — ProfessionalProfile
-// ============================================
-
-/// Perfil do profissional de design de interiores.
-/// Inclui dados de verificação, financeiro e métricas.
-model ProfessionalProfile {
-  id                String             @id @default(uuid())
-  userId            String             @unique @map("user_id")
-  publicId          String?            @unique @map("public_id")
-  displayName       String             @map("display_name")
-  bio               String?
-  cpfCnpj           String?            @map("cpf_cnpj")
-  documentUrl       String?            @map("document_url")
-  status            ProfessionalStatus @default(PENDING_APPROVAL)
-  experienceYears   Int                @default(0) @map("experience_years")
-  city              String?
-  state             String?
-  instagram         String?
-  averageRating     Float              @default(0) @map("average_rating")
-  completedProjects Int                @default(0) @map("completed_projects")
-
-  // Dados bancários para saque
-  bankName    String? @map("bank_name")
-  bankAgency  String? @map("bank_agency")
-  bankAccount String? @map("bank_account")
-  pixKey      String? @map("pix_key")
-
-  // ── Assinatura Mensal (Mercado Pago) ──────────────────────────────
-  subscriptionStatus    ProfessionalSubscriptionStatus @default(INACTIVE) @map("subscription_status")
-  subscriptionExpiresAt DateTime?                      @map("subscription_expires_at")
-  mpSubscriptionId      String?                        @map("mp_subscription_id")
-  mpPreapprovalPlanId   String?                        @map("mp_preapproval_plan_id")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relação 1:1 com User
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Relações 1:N
-  styles         ProfessionalStyle[]
-  portfolioItems PortfolioItem[]
-  projects       Project[]           @relation("ProfessionalProjects")
-  proposals      Proposal[]
-  withdrawals    Withdrawal[]
-
-  @@map("professional_profiles")
-}
-
-// ============================================
-// MODELO 4 — ProfessionalStyle
-// ============================================
-
-/// Estilo de design que o profissional oferece.
-/// Usado para matching com preferências do cliente.
-model ProfessionalStyle {
-  id                    String @id @default(uuid())
-  professionalProfileId String @map("professional_profile_id")
-  name                  String
-  description           String?
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relação N:1 com ProfessionalProfile
-  professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-
-  @@map("professional_styles")
-}
-
-// ============================================
-// MODELO 5 — PortfolioItem
-// ============================================
-
-/// Item do portfólio do profissional.
-/// Exibido no perfil público para atrair clientes.
-/// Suporta imagem, documento (PDF/Word) ou link externo (site).
-model PortfolioItem {
-  id                    String  @id @default(uuid())
-  professionalProfileId String  @map("professional_profile_id")
-  title                 String
-  description           String?
-  imageUrl              String  @map("image_url") // imagem de capa/thumbnail (obrigatória para exibição)
-  documentUrl           String? @map("document_url") // URL do arquivo (PDF, Word, etc.)
-  linkUrl               String? @map("link_url") // URL externa (site do projeto, Behance, etc.)
-  category              String?
-  order                 Int     @default(0)
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relação N:1 com ProfessionalProfile
-  professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-
-  @@map("portfolio_items")
-}
-
-// ============================================
-// MODELO 6 — Project
-// ============================================
-
-/// Projeto de design de interiores.
-/// Representa o ciclo completo: briefing → matching → execução → entrega → aprovação.
-model Project {
-  id                    String        @id @default(uuid())
-  clientId              String        @map("client_id")
-  professionalProfileId String?       @map("professional_profile_id")
-
-  /// Profissional selecionado pelo cliente (após negociação, antes do pagamento)
-  selectedProfessionalId String?      @map("selected_professional_id")
-
-  publicId              String?       @unique @map("public_id")
-  title                 String
-  status                ProjectStatus @default(BRIEFING_SUBMITTED)
-  packageType           String?       @map("package_type")
-  price                 Float?
-  startedAt             DateTime?     @map("started_at")
-  completedAt           DateTime?     @map("completed_at")
-  revisionsUsed         Int           @default(0) @map("revisions_used")
-  maxRevisions          Int           @default(3) @map("max_revisions")
-
-  // ── Campos Mercado Pago ────────────────────────────────────────────
-  /// ID da preferência de pagamento criada na API do MP
-  paymentPreferenceId   String?       @map("payment_preference_id")
-  /// URL de checkout para redirecionar o cliente ao MP
-  paymentCheckoutUrl    String?       @map("payment_checkout_url")
-  /// ID do pagamento efetivado (após webhook de aprovação)
-  paymentId             String?       @map("payment_id")
-  /// Status do pagamento retornado pelo MP (pending | approved | rejected | ...)
-  paymentStatus         String?       @map("payment_status")
-  /// Método de pagamento (pix | credit_card | debit_card | account_money)
-  paymentMethod         String?       @map("payment_method")
-  /// Número de parcelas do cartão de crédito
-  installments          Int?          @map("installments")
-  /// Valor efetivamente transacionado (pode diferir de price em caso de desconto MP)
-  transactionAmount     Float?        @map("transaction_amount")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relações
-  client              User                 @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
-  professionalProfile ProfessionalProfile? @relation("ProfessionalProjects", fields: [professionalProfileId], references: [id], onDelete: SetNull)
-
-  // Relações 1:1
-  briefing Briefing?
-  payment  Payment?
-  review   Review?
-
-  // Relações 1:N
-  messages Message[]
-  files    ProjectFile[]
-  proposals Proposal[]
-
-  @@map("projects")
-}
-
-// ============================================
-// MODELO 6b — Proposal (proposta profissional → cliente)
-// ============================================
-
-/// Proposta enviada pelo profissional ao cliente (valor, escopo, prazo).
-/// Uma proposta PENDING mostra o card "Aceitar/Recusar"; ACCEPTED/DECLINED para histórico.
-model Proposal {
-  id                    String         @id @default(uuid())
-  projectId             String         @map("project_id")
-  professionalProfileId String         @map("professional_profile_id")
-  price                 Float
-  status                ProposalStatus @default(PENDING)
-  packageType           String?        @map("package_type")
-  estimatedDays         Int?           @map("estimated_days")
-  notes                 String?        // observações (message do modal)
-  createdAt             DateTime       @default(now()) @map("created_at")
-  updatedAt             DateTime       @updatedAt @map("updated_at")
-
-  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  professionalProfile  ProfessionalProfile  @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-
-  @@index([projectId, status])
-  @@map("proposals")
-}
-
-// ============================================
-// MODELO 7 — Briefing
-// ============================================
-
-/// Briefing do projeto, preenchido pelo cliente.
-/// Contém os requisitos, preferências e referências visuais.
-model Briefing {
-  id               String   @id @default(uuid())
-  projectId        String   @unique @map("project_id")
-  roomType         String?  @map("room_type")
-  roomSize         String?  @map("room_size")
-  budget           Float?
-  description      String?
-  stylePreferences String[] @default([]) @map("style_preferences")
-  referenceImages  String[] @default([]) @map("reference_images")
-  requirements     String?
-  deadline         DateTime?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relação 1:1 com Project
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@map("briefings")
-}
-
-// ============================================
-// MODELO 8 — Message
-// ============================================
-
-/// Mensagem do chat de um projeto.
-/// Suporta texto e arquivos anexados.
-model Message {
-  id              String    @id @default(uuid())
-  projectId       String    @map("project_id")
-  senderId        String    @map("sender_id")
-  content         String
-  fileUrl         String?   @map("file_url")
-  fileStoragePath String?   @map("file_storage_path") // path no bucket privado do chat (para gerar signed URL)
-  fileType        FileType? @map("file_type")
-  isRead          Boolean   @default(false) @map("is_read")
-  isBlocked       Boolean   @default(false) @map("is_blocked") // para rastreamento de violações
-  blockReason     String?   @map("block_reason") // o motivo, ex: 'PHONE_DETECTED'
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relações
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sender  User    @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-
-  @@index([projectId, createdAt])
-  @@map("messages")
-}
-
-// ============================================
-// MODELO 9 — ProjectFile
-// ============================================
-
-/// Arquivo do projeto (entregáveis, referências, documentos).
-/// Usado para uploads de entregáveis pelo profissional e referências pelo cliente.
-model ProjectFile {
-  id            String   @id @default(uuid())
-  projectId     String   @map("project_id")
-  uploadedById  String   @map("uploaded_by_id")
-  fileName      String   @map("file_name")
-  fileUrl       String   @map("file_url")
-  fileType      FileType @default(OTHER) @map("file_type")
-  description   String?
-  isDeliverable Boolean  @default(false) @map("is_deliverable")
-  version       Int      @default(1)
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relações
-  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedBy User    @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
-
-  @@map("project_files")
-}
-
-// ============================================
-// MODELO 10 — Payment (Escrow MVP)
-// ============================================
-
-/// Registro de pagamento com escrow simulado.
-/// platformFee = 15% do amount; professionalAmount = 85%.
-model Payment {
-  id                 String        @id @default(uuid())
-  projectId          String        @unique @map("project_id")
-  amount             Float
-  platformFee        Float         @map("platform_fee")
-  professionalAmount Float         @map("professional_amount")
-  status             PaymentStatus @default(PENDING)
-  escrowStartedAt    DateTime?     @map("escrow_started_at")
-  releasedAt         DateTime?     @map("released_at")
-  refundedAt         DateTime?     @map("refunded_at")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relação 1:1 com Project
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@map("payments")
-}
-
-// ============================================
-// MODELO 11 — Withdrawal
-// ============================================
-
-/// Solicitação de saque do profissional.
-/// Processada manualmente pelo admin no MVP.
-model Withdrawal {
-  id                    String           @id @default(uuid())
-  professionalProfileId String           @map("professional_profile_id")
-  amount                Float
-  status                WithdrawalStatus @default(REQUESTED)
-  adminNotes            String?          @map("admin_notes")
-  requestedAt           DateTime         @default(now()) @map("requested_at")
-  processedAt           DateTime?        @map("processed_at")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relação N:1 com ProfessionalProfile
-  professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-
-  @@map("withdrawals")
-}
-
-// ============================================
-// MODELO 12 — Review
-// ============================================
-
-/// Avaliação pós-projeto feita pelo cliente sobre o profissional.
-/// Moderada pelo admin antes de ser publicada.
-model Review {
-  id        String  @id @default(uuid())
-  projectId String  @unique @map("project_id")
-  rating    Int
-  comment   String?
-  isPublic  Boolean @default(true) @map("is_public")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relação 1:1 com Project
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@map("reviews")
-}
-
-// ============================================
-// MODELO 13 — Notification
-// ============================================
-
-/// Notificação do sistema.
-/// Pode ser in-app ou disparar e-mail (estrutura futura).
-model Notification {
-  id      String           @id @default(uuid())
-  userId  String           @map("user_id")
-  type    NotificationType
-  title   String
-  message String
-  data    Json?
-  isRead  Boolean          @default(false) @map("is_read")
-  readAt  DateTime?        @map("read_at")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relação N:1 com User
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, isRead])
-  @@map("notifications")
-}
-
-// ============================================
-// MODELO 14 — SystemConfig (configurações do sistema / admin)
-// ============================================
-
-/// Configurações gerais do sistema (ex: chave PIX do admin para receber pagamentos MVP).
-model SystemConfig {
-  id    String @id @default(uuid())
-  key   String @unique
-  value String
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("system_config")
-}
-

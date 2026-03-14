@@ -42,7 +42,6 @@ export class ProfessionalsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
-    // Remover dados sensíveis
     const {
       cpfCnpj,
       documentUrl,
@@ -50,7 +49,6 @@ export class ProfessionalsService {
       bankAgency,
       bankAccount,
       pixKey,
-      instagram,
       ...publicProfile
     } = profile;
     return publicProfile;
