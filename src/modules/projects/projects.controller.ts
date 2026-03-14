@@ -6,6 +6,7 @@ import {
   RequestProposalDto,
   RequestRevisionDto,
   SendProposalDto,
+  SelectProfessionalDto,
 } from './dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -144,5 +145,39 @@ export class ProjectsController {
     @Body() dto: RequestRevisionDto,
   ) {
     return this.projectsService.requestRevision(id, user.id, dto);
+  }
+
+  /**
+   * GET /api/v1/projects/:id/chat-professionals
+   * Lista profissionais com quem o cliente já conversou neste projeto.
+   * Usado para popular a tela de seleção de decorador.
+   */
+  @Get(':id/chat-professionals')
+  @Roles(Role.CLIENT)
+  @ApiOperation({ summary: 'Listar profissionais com chat ativo no projeto' })
+  async getChatProfessionals(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.projectsService.getChatProfessionals(id, user.id);
+  }
+
+  /**
+   * POST /api/v1/projects/:id/select-professional
+   * Cliente seleciona profissional e recebe URL de checkout do Mercado Pago.
+   * Status do projeto → AWAITING_PAYMENT.
+   */
+  @Post(':id/select-professional')
+  @Roles(Role.CLIENT)
+  @ApiOperation({
+    summary:
+      'Selecionar profissional e criar preferência de pagamento Mercado Pago',
+  })
+  async selectProfessional(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SelectProfessionalDto,
+  ) {
+    return this.projectsService.selectProfessional(id, user.id, dto);
   }
 }

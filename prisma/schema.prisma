@@ -8,8 +8,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -37,6 +38,7 @@ enum ProjectStatus {
   MATCHING
   NEGOCIANDO
   PROFESSIONAL_ASSIGNED
+  AWAITING_PAYMENT
   IN_PROGRESS
   REVISION_REQUESTED
   DELIVERED
@@ -60,6 +62,14 @@ enum WithdrawalStatus {
   PROCESSING
   COMPLETED
   REJECTED
+}
+
+/// Status da assinatura mensal do profissional
+enum ProfessionalSubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  PAST_DUE
+  CANCELED
 }
 
 /// Tipo de arquivo enviado na plataforma
@@ -170,6 +180,12 @@ model ProfessionalProfile {
   bankAccount String? @map("bank_account")
   pixKey      String? @map("pix_key")
 
+  // ── Assinatura Mensal (Mercado Pago) ──────────────────────────────
+  subscriptionStatus    ProfessionalSubscriptionStatus @default(INACTIVE) @map("subscription_status")
+  subscriptionExpiresAt DateTime?                      @map("subscription_expires_at")
+  mpSubscriptionId      String?                        @map("mp_subscription_id")
+  mpPreapprovalPlanId   String?                        @map("mp_preapproval_plan_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -243,6 +259,10 @@ model Project {
   id                    String        @id @default(uuid())
   clientId              String        @map("client_id")
   professionalProfileId String?       @map("professional_profile_id")
+
+  /// Profissional selecionado pelo cliente (após negociação, antes do pagamento)
+  selectedProfessionalId String?      @map("selected_professional_id")
+
   title                 String
   status                ProjectStatus @default(BRIEFING_SUBMITTED)
   packageType           String?       @map("package_type")
@@ -251,6 +271,22 @@ model Project {
   completedAt           DateTime?     @map("completed_at")
   revisionsUsed         Int           @default(0) @map("revisions_used")
   maxRevisions          Int           @default(3) @map("max_revisions")
+
+  // ── Campos Mercado Pago ────────────────────────────────────────────
+  /// ID da preferência de pagamento criada na API do MP
+  paymentPreferenceId   String?       @map("payment_preference_id")
+  /// URL de checkout para redirecionar o cliente ao MP
+  paymentCheckoutUrl    String?       @map("payment_checkout_url")
+  /// ID do pagamento efetivado (após webhook de aprovação)
+  paymentId             String?       @map("payment_id")
+  /// Status do pagamento retornado pelo MP (pending | approved | rejected | ...)
+  paymentStatus         String?       @map("payment_status")
+  /// Método de pagamento (pix | credit_card | debit_card | account_money)
+  paymentMethod         String?       @map("payment_method")
+  /// Número de parcelas do cartão de crédito
+  installments          Int?          @map("installments")
+  /// Valor efetivamente transacionado (pode diferir de price em caso de desconto MP)
+  transactionAmount     Float?        @map("transaction_amount")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

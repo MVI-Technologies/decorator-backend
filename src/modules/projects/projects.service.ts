@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -12,8 +13,10 @@ import {
   RequestRevisionDto,
   RespondProposalDto,
   SendProposalDto,
+  SelectProfessionalDto,
 } from './dto';
 import { ConfigService } from '@nestjs/config';
+import { MercadoPagoService } from '../payments/mercadopago.service';
 
 /**
  * Service de Projetos.
@@ -28,6 +31,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly mercadoPagoService: MercadoPagoService,
   ) {
     this.platformFeeRate = parseFloat(
       this.configService.get<string>('ESCROW_COMMISSION_RATE', '0.15'),
@@ -707,5 +711,259 @@ export class ProjectsService {
     );
 
     return updatedProject;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NOVOS MÉTODOS: Seleção de Profissional + Pagamento Mercado Pago
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Lista profissionais que possuem conversa ativa com o cliente neste projeto.
+   * GET /projects/:id/chat-professionals
+   *
+   * Retorna apenas profissionais (role=PROFESSIONAL) que enviaram ou receberam
+   * mensagens no canal do projeto com o clientId.
+   */
+  async getChatProfessionals(projectId: string, clientId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) throw new NotFoundException('Projeto não encontrado');
+    if (project.clientId !== clientId) throw new ForbiddenException('Sem permissão');
+
+    // Buscar IDs únicos de remetentes (exceto o próprio cliente)
+    const messages = await this.prisma.message.findMany({
+      where: {
+        projectId,
+        senderId: { not: clientId },
+      },
+      select: {
+        senderId: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (messages.length === 0) return [];
+
+    // IDs únicos de usuários que enviaram mensagens
+    const senderIds = [...new Set(messages.map((m) => m.senderId))];
+
+    // Buscar ProfessionalProfiles desses usuários (apenas PROFESSIONAL + APPROVED + ACTIVE SUBSCRIPTION)
+    const profiles = await this.prisma.professionalProfile.findMany({
+      where: {
+        userId: { in: senderIds },
+        status: 'APPROVED',
+        subscriptionStatus: 'ACTIVE',
+      } as any,
+      include: {
+        user: {
+          select: { id: true, name: true, avatarUrl: true },
+        },
+        styles: true,
+        portfolioItems: {
+          take: 3,
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (profiles.length === 0) return [];
+
+    // Para cada profissional, calcular contagem e data da última mensagem
+    const result = await Promise.all(
+      profiles.map(async (prof) => {
+        // mensagens trocadas entre cliente e este profissional no projeto
+        const [count, lastMsg] = await Promise.all([
+          this.prisma.message.count({
+            where: {
+              projectId,
+              OR: [{ senderId: prof.userId }, { senderId: clientId }],
+            },
+          }),
+          this.prisma.message.findFirst({
+            where: {
+              projectId,
+              OR: [{ senderId: prof.userId }, { senderId: clientId }],
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
+          }),
+        ]);
+
+        return {
+          professionalProfileId: prof.id,
+          professionalProfile: {
+            id: prof.id,
+            displayName: prof.displayName,
+            bio: prof.bio,
+            city: prof.city,
+            state: prof.state,
+            averageRating: prof.averageRating,
+            reviewCount: prof.completedProjects, // proxy para reviewCount
+            styles: prof.styles.map((s) => ({ id: s.id, name: s.name })),
+            portfolioItems: prof.portfolioItems.map((p) => ({
+              id: p.id,
+              title: p.title,
+              imageUrl: p.imageUrl,
+            })),
+            user: prof.user,
+          },
+          messageCount: count,
+          lastMessageAt: lastMsg?.createdAt ?? new Date(),
+        };
+      }),
+    );
+
+    // Ordenar por data da última mensagem (mais recente primeiro)
+    return result.sort(
+      (a, b) =>
+        new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+    );
+  }
+
+  /**
+   * Cliente seleciona um profissional com quem já conversou e inicia o pagamento via MP.
+   * POST /projects/:id/select-professional
+   *
+   * Regras de negócio:
+   * - Apenas o cliente dono do projeto pode selecionar
+   * - O profissional deve ter chat com o cliente neste projeto
+   * - Não permite seleção se já houver uma seleção ou pagamento aprovado
+   * - Idempotente: se link MP já existe e status é AWAITING_PAYMENT, retorna o link existente
+   * - Após seleção: projeto → AWAITING_PAYMENT, salva preferenceId e checkoutUrl
+   */
+  async selectProfessional(
+    projectId: string,
+    clientId: string,
+    dto: SelectProfessionalDto,
+  ) {
+    // Buscar projeto com dados do cliente
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        client: {
+          select: { id: true, name: true, email: true, phone: true },
+        },
+      },
+    });
+
+    if (!project) throw new NotFoundException('Projeto não encontrado');
+    if (project.clientId !== clientId) throw new ForbiddenException('Sem permissão');
+
+    // Guard: se pagamento já foi aprovado, não permitir alteração
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((project as any).paymentStatus === 'approved') {
+      throw new ConflictException(
+        'Pagamento já aprovado para este projeto — não é possível alterar o profissional',
+      );
+    }
+
+    // Idempotência: se já existe seleção para o mesmo profissional com link MP,
+    // reutilizar o link existente em vez de gerar um novo
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = project as any;
+    if (
+      p.selectedProfessionalId === dto.professionalProfileId &&
+      p.paymentCheckoutUrl
+    ) {
+      this.logger.log(
+        `Idempotência: retornando checkout existente para projeto ${projectId}`,
+      );
+      return {
+        checkoutUrl: p.paymentCheckoutUrl as string,
+        paymentPreferenceId: p.paymentPreferenceId as string,
+        project,
+      };
+    }
+
+    // Guard: não permitir se já foi selecionado outro profissional com pagamento pendente
+    if (
+      p.selectedProfessionalId &&
+      p.selectedProfessionalId !== dto.professionalProfileId &&
+      project.status === ('AWAITING_PAYMENT' as any)
+    ) {
+      throw new ConflictException(
+        'Já existe um profissional selecionado aguardando pagamento para este projeto. Finalize o pagamento ou entre em contato com o suporte.',
+      );
+    }
+
+    // Validar que o profissional existe, está aprovado e tem mensalidade em dia
+    const professional = await this.prisma.professionalProfile.findUnique({
+      where: { id: dto.professionalProfileId },
+      include: { user: { select: { id: true } } },
+    });
+
+    if (!professional || professional.status !== 'APPROVED') {
+      throw new BadRequestException('Profissional não encontrado ou aprovação pendente');
+    }
+
+    if ((professional as any).subscriptionStatus !== 'ACTIVE') {
+      throw new BadRequestException(
+        'Este profissional está com a mensalidade pendente e não pode aceitar novos projetos no momento.',
+      );
+    }
+
+    // Validar que o profissional possui chat com o cliente neste projeto
+    const chatCount = await this.prisma.message.count({
+      where: {
+        projectId,
+        senderId: professional.user.id,
+      },
+    });
+
+    if (chatCount === 0) {
+      throw new BadRequestException(
+        'Você só pode selecionar profissionais com quem já conversou neste projeto',
+      );
+    }
+
+    // Criar preferência no Mercado Pago
+    this.logger.log(
+      `Criando preferência MP: projeto=${projectId} profissional=${dto.professionalProfileId}`,
+    );
+
+    const mpResult = await this.mercadoPagoService.createPreference({
+      projectId,
+      projectTitle: project.title,
+      price: project.price ?? 0,
+      clientName: project.client.name,
+      clientEmail: project.client.email,
+      clientPhone: project.client.phone ?? undefined,
+    });
+
+    // Atualizar projeto em transação
+    const updatedProject = await this.prisma.$transaction(async (tx) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return tx.project.update({
+        where: { id: projectId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ...({
+            selectedProfessionalId: dto.professionalProfileId,
+            status: 'AWAITING_PAYMENT',
+            paymentPreferenceId: mpResult.preferenceId,
+            paymentCheckoutUrl: mpResult.checkoutUrl,
+            paymentId: null,
+            paymentStatus: null,
+          } as any),
+        },
+        include: {
+          client: { select: { id: true, name: true, email: true } },
+        },
+      });
+    });
+
+    this.logger.log(
+      `Profissional ${dto.professionalProfileId} selecionado para projeto ${projectId}. ` +
+        `Status → AWAITING_PAYMENT. preferenceId=${mpResult.preferenceId}`,
+    );
+
+    return {
+      checkoutUrl: mpResult.checkoutUrl,
+      paymentPreferenceId: mpResult.preferenceId,
+      project: updatedProject,
+    };
   }
 }
