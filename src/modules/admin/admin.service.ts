@@ -295,7 +295,7 @@ export class AdminService {
     ]);
 
     return {
-      professionalMonthlyFee: monthlyFee?.value ? parseFloat(monthlyFee.value) : 21.90,
+      professionalMonthlyFee: monthlyFee?.value ? parseFloat(monthlyFee.value) : 1.00,
       platformFeePercentage: platformFee?.value ? parseFloat(platformFee.value) : 15,
       maxInstallments: maxInstallments?.value ? parseInt(maxInstallments.value, 10) : 12,
     };

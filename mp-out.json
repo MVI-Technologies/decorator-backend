@@ -1,0 +1,690 @@
+{
+  "results": [
+    {
+      "accounts_info": null,
+      "acquirer_reconciliation": [],
+      "additional_info": {
+        "tracking_id": "platform:v1-whitelabel,so:ALL,type:N/A,security:none"
+      },
+      "authorization_code": null,
+      "binary_mode": true,
+      "brand_id": null,
+      "build_version": "3.150.0-rc-6",
+      "call_for_authorize_id": null,
+      "captured": true,
+      "card": {
+        "bin": null,
+        "cardholder": {
+          "identification": {
+            "number": null,
+            "type": null
+          },
+          "name": null
+        },
+        "country": null,
+        "date_created": null,
+        "date_last_updated": null,
+        "expiration_month": null,
+        "expiration_year": null,
+        "first_six_digits": null,
+        "id": null,
+        "last_four_digits": "***9",
+        "tags": []
+      },
+      "charges_details": [
+        {
+          "accounts": {
+            "from": "collector",
+            "to": "mp"
+          },
+          "amounts": {
+            "original": 0.02,
+            "refunded": 0
+          },
+          "client_id": 0,
+          "date_created": "2026-03-31T18:21:25.000-04:00",
+          "external_charge_id": "01KN2ZSFY5TQQYMRARV04F4FR1",
+          "id": "152002091385-001",
+          "last_updated": "2026-03-31T18:21:25.000-04:00",
+          "metadata": {
+            "reason": "",
+            "source": "proc-svc-charges",
+            "source_detail": "processing_fee_charge"
+          },
+          "name": "mercadopago_fee",
+          "refund_charges": [],
+          "reserve_id": null,
+          "type": "fee",
+          "update_charges": []
+        },
+        {
+          "accounts": {
+            "from": "collector",
+            "to": "mp"
+          },
+          "amounts": {
+            "original": 0.02,
+            "refunded": 0
+          },
+          "base_amount": 0,
+          "client_id": 0,
+          "date_created": "2026-03-31T18:21:25.000-04:00",
+          "external_charge_id": "01KN2ZSFY5VKWA9ZZ2W9RTAAAT",
+          "id": "152002091385-002",
+          "last_updated": "2026-03-31T18:21:25.000-04:00",
+          "metadata": {
+            "source": "proc-svc-charges",
+            "source_detail": "financed_advance_fee_charge"
+          },
+          "name": "financed_advance_fee",
+          "rate": 1,
+          "refund_charges": [],
+          "reserve_id": null,
+          "type": "fee",
+          "update_charges": []
+        }
+      ],
+      "charges_execution_info": {
+        "internal_execution": {
+          "date": "2026-03-31T18:21:25.328-04:00",
+          "execution_id": "01KN2ZSFX56ZDCQVGBBASWB8CM"
+        }
+      },
+      "collector_id": 323913758,
+      "corporation_id": null,
+      "counter_currency": null,
+      "coupon_amount": 0,
+      "currency_id": "BRL",
+      "date_approved": null,
+      "date_created": "2026-03-31T18:21:25.000-04:00",
+      "date_last_updated": "2026-03-31T18:21:34.000-04:00",
+      "date_of_expiration": null,
+      "deduction_schema": null,
+      "description": "Assinatura Decornet - Profissional",
+      "differential_pricing_id": null,
+      "external_reference": null,
+      "fee_details": [],
+      "financing_group": null,
+      "id": 152002091385,
+      "installments": 1,
+      "integrator_id": null,
+      "issuer_id": "12518",
+      "live_mode": true,
+      "marketplace_owner": null,
+      "merchant_account_id": null,
+      "merchant_number": null,
+      "metadata": {},
+      "money_release_date": null,
+      "money_release_schema": null,
+      "money_release_status": "released",
+      "notification_url": null,
+      "operation_type": "regular_payment",
+      "order": {},
+      "payer": {
+        "email": null,
+        "entity_type": null,
+        "first_name": null,
+        "id": "3306938684",
+        "identification": {
+          "number": null,
+          "type": null
+        },
+        "last_name": null,
+        "operator_id": null,
+        "phone": {
+          "number": null,
+          "extension": null,
+          "area_code": null
+        },
+        "type": null
+      },
+      "payment_method": {
+        "data": {
+          "routing_data": {
+            "merchant_account_id": "38"
+          }
+        },
+        "id": "master",
+        "issuer_id": "12518",
+        "type": "credit_card"
+      },
+      "payment_method_id": "master",
+      "payment_type_id": "credit_card",
+      "platform_id": null,
+      "point_of_interaction": {
+        "application_data": {
+          "name": null,
+          "operating_system": null,
+          "version": null
+        },
+        "business_info": {
+          "branch": "Merchant Services",
+          "sub_unit": "recurring",
+          "unit": "online_payments"
+        },
+        "location": {
+          "source": "collector",
+          "state_id": "BR-PR"
+        },
+        "references": [
+          {
+            "id": "6f351666f7054b42b9e1964d7c12d57a",
+            "type": "RECURRING_INVOICE"
+          },
+          {
+            "id": "323913758-c7c7cc80-a0e5-48bd-b668-4f40ed0d435c",
+            "type": "PREFERENCE"
+          },
+          {
+            "id": "71c484225840470f88264494dcb6ec03",
+            "type": "AUTOMATIC_PAYMENTS_ATTEMPT"
+          }
+        ],
+        "transaction_data": {
+          "billing_date": "2026-03-30",
+          "first_time_use": true,
+          "invoice_id": null,
+          "invoice_period": {
+            "period": 1,
+            "type": "monthly"
+          },
+          "payment_reference": null,
+          "plan_id": "228babc3cefe4df491f5c27a51e0f88e",
+          "processor": null,
+          "subscription_id": "b19df82592584a038dd58b3c2d456d6f",
+          "subscription_sequence": {
+            "number": 1,
+            "total": null
+          },
+          "user_present": true
+        },
+        "type": "SUBSCRIPTIONS"
+      },
+      "pos_id": null,
+      "processing_mode": "aggregator",
+      "refunds": [],
+      "release_info": null,
+      "shipping_amount": 0,
+      "sponsor_id": null,
+      "statement_descriptor": null,
+      "status": "rejected",
+      "status_detail": "cc_rejected_high_risk",
+      "store_id": null,
+      "tags": null,
+      "taxes_amount": 0,
+      "transaction_amount": 1,
+      "transaction_amount_refunded": 0,
+      "transaction_details": {
+        "acquirer_reference": null,
+        "external_resource_url": null,
+        "financial_institution": null,
+        "installment_amount": 1,
+        "net_received_amount": 0,
+        "overpaid_amount": 0,
+        "payable_deferral_period": null,
+        "payment_method_reference_id": null,
+        "total_paid_amount": 1
+      },
+      "shipping_cost": 0
+    },
+    {
+      "accounts_info": null,
+      "acquirer_reconciliation": [],
+      "additional_info": {
+        "tracking_id": "platform:v1-whitelabel,so:ALL,type:N/A,security:none"
+      },
+      "authorization_code": null,
+      "binary_mode": true,
+      "brand_id": null,
+      "build_version": "3.150.0-rc-6",
+      "call_for_authorize_id": null,
+      "captured": true,
+      "card": {
+        "bin": null,
+        "cardholder": {
+          "identification": {
+            "number": null,
+            "type": null
+          },
+          "name": null
+        },
+        "country": null,
+        "date_created": null,
+        "date_last_updated": null,
+        "expiration_month": null,
+        "expiration_year": null,
+        "first_six_digits": null,
+        "id": null,
+        "last_four_digits": "***2",
+        "tags": []
+      },
+      "charges_details": [
+        {
+          "accounts": {
+            "from": "collector",
+            "to": "mp"
+          },
+          "amounts": {
+            "original": 0.02,
+            "refunded": 0
+          },
+          "client_id": 0,
+          "date_created": "2026-03-31T18:15:38.000-04:00",
+          "external_charge_id": "01KN2ZEWQMRCM3KM3FN25PBHTK",
+          "id": "152738707660-001",
+          "last_updated": "2026-03-31T18:15:38.000-04:00",
+          "metadata": {
+            "reason": "",
+            "source": "proc-svc-charges",
+            "source_detail": "processing_fee_charge"
+          },
+          "name": "mercadopago_fee",
+          "refund_charges": [],
+          "reserve_id": null,
+          "type": "fee",
+          "update_charges": []
+        },
+        {
+          "accounts": {
+            "from": "collector",
+            "to": "mp"
+          },
+          "amounts": {
+            "original": 0.02,
+            "refunded": 0
+          },
+          "base_amount": 0,
+          "client_id": 0,
+          "date_created": "2026-03-31T18:15:38.000-04:00",
+          "external_charge_id": "01KN2ZEWQMSBVJZWC122090T29",
+          "id": "152738707660-002",
+          "last_updated": "2026-03-31T18:15:38.000-04:00",
+          "metadata": {
+            "source": "proc-svc-charges",
+            "source_detail": "financed_advance_fee_charge"
+          },
+          "name": "financed_advance_fee",
+          "rate": 1,
+          "refund_charges": [],
+          "reserve_id": null,
+          "type": "fee",
+          "update_charges": []
+        }
+      ],
+      "charges_execution_info": {
+        "internal_execution": {
+          "date": "2026-03-31T18:15:37.983-04:00",
+          "execution_id": "01KN2ZEWPS0XQKCTD871ZHXRFW"
+        }
+      },
+      "collector_id": 323913758,
+      "corporation_id": null,
+      "counter_currency": null,
+      "coupon_amount": 0,
+      "currency_id": "BRL",
+      "date_approved": null,
+      "date_created": "2026-03-31T18:15:38.000-04:00",
+      "date_last_updated": "2026-03-31T18:15:45.000-04:00",
+      "date_of_expiration": null,
+      "deduction_schema": null,
+      "description": "Assinatura Decornet - Profissional",
+      "differential_pricing_id": null,
+      "external_reference": null,
+      "fee_details": [],
+      "financing_group": null,
+      "id": 152738707660,
+      "installments": 1,
+      "integrator_id": null,
+      "issuer_id": "12510",
+      "live_mode": true,
+      "marketplace_owner": null,
+      "merchant_account_id": null,
+      "merchant_number": null,
+      "metadata": {},
+      "money_release_date": null,
+      "money_release_schema": null,
+      "money_release_status": "released",
+      "notification_url": null,
+      "operation_type": "regular_payment",
+      "order": {},
+      "payer": {
+        "email": null,
+        "entity_type": null,
+        "first_name": null,
+        "id": "1596283629",
+        "identification": {
+          "number": null,
+          "type": null
+        },
+        "last_name": null,
+        "operator_id": null,
+        "phone": {
+          "number": null,
+          "extension": null,
+          "area_code": null
+        },
+        "type": null
+      },
+      "payment_method": {
+        "data": {
+          "routing_data": {
+            "merchant_account_id": "2036"
+          }
+        },
+        "id": "visa",
+        "issuer_id": "12510",
+        "type": "credit_card"
+      },
+      "payment_method_id": "visa",
+      "payment_type_id": "credit_card",
+      "platform_id": null,
+      "point_of_interaction": {
+        "application_data": {
+          "name": null,
+          "operating_system": null,
+          "version": null
+        },
+        "business_info": {
+          "branch": "Merchant Services",
+          "sub_unit": "recurring",
+          "unit": "online_payments"
+        },
+        "location": {
+          "source": "collector",
+          "state_id": "BR-PR"
+        },
+        "references": [
+          {
+            "id": "919e41d4e2b34d00833497f56db6d883",
+            "type": "RECURRING_INVOICE"
+          },
+          {
+            "id": "323913758-4dd838e3-48f2-4e26-8094-fcc1d3d58f58",
+            "type": "PREFERENCE"
+          },
+          {
+            "id": "cfbe284e4f9045e5ab50f95062558bf2",
+            "type": "AUTOMATIC_PAYMENTS_ATTEMPT"
+          }
+        ],
+        "transaction_data": {
+          "billing_date": "2026-03-30",
+          "first_time_use": true,
+          "invoice_id": null,
+          "invoice_period": {
+            "period": 1,
+            "type": "monthly"
+          },
+          "payment_reference": null,
+          "plan_id": "7fc36b4bbf11445d9bcaf49e162c4b5b",
+          "processor": null,
+          "subscription_id": "b4435c55489e4f689ba8317eb8052335",
+          "subscription_sequence": {
+            "number": 1,
+            "total": null
+          },
+          "user_present": true
+        },
+        "type": "SUBSCRIPTIONS"
+      },
+      "pos_id": null,
+      "processing_mode": "aggregator",
+      "refunds": [],
+      "release_info": null,
+      "shipping_amount": 0,
+      "sponsor_id": null,
+      "statement_descriptor": null,
+      "status": "rejected",
+      "status_detail": "cc_rejected_high_risk",
+      "store_id": null,
+      "tags": null,
+      "taxes_amount": 0,
+      "transaction_amount": 1,
+      "transaction_amount_refunded": 0,
+      "transaction_details": {
+        "acquirer_reference": null,
+        "external_resource_url": null,
+        "financial_institution": null,
+        "installment_amount": 1,
+        "net_received_amount": 0,
+        "overpaid_amount": 0,
+        "payable_deferral_period": null,
+        "payment_method_reference_id": null,
+        "total_paid_amount": 1
+      },
+      "shipping_cost": 0
+    },
+    {
+      "accounts_info": null,
+      "acquirer_reconciliation": [],
+      "additional_info": {
+        "tracking_id": "platform:v1-whitelabel,so:ALL,type:N/A,security:none"
+      },
+      "authorization_code": null,
+      "binary_mode": true,
+      "brand_id": null,
+      "build_version": "3.150.0-rc-6",
+      "call_for_authorize_id": null,
+      "captured": true,
+      "card": {
+        "bin": null,
+        "cardholder": {
+          "identification": {
+            "number": null,
+            "type": null
+          },
+          "name": null
+        },
+        "country": null,
+        "date_created": null,
+        "date_last_updated": null,
+        "expiration_month": null,
+        "expiration_year": null,
+        "first_six_digits": null,
+        "id": null,
+        "last_four_digits": "***1",
+        "tags": []
+      },
+      "charges_details": [
+        {
+          "accounts": {
+            "from": "collector",
+            "to": "mp"
+          },
+          "amounts": {
+            "original": 0.25,
+            "refunded": 0
+          },
+          "client_id": 0,
+          "date_created": "2026-03-31T17:54:40.000-04:00",
+          "external_charge_id": "01KN2Y8GZJSHJRNYWZV7KKXAA4",
+          "id": "151997745197-001",
+          "last_updated": "2026-03-31T17:54:40.000-04:00",
+          "metadata": {
+            "reason": "",
+            "source": "proc-svc-charges",
+            "source_detail": "processing_fee_charge"
+          },
+          "name": "mercadopago_fee",
+          "refund_charges": [],
+          "reserve_id": null,
+          "type": "fee",
+          "update_charges": []
+        },
+        {
+          "accounts": {
+            "from": "collector",
+            "to": "mp"
+          },
+          "amounts": {
+            "original": 0.25,
+            "refunded": 0
+          },
+          "base_amount": 0,
+          "client_id": 0,
+          "date_created": "2026-03-31T17:54:40.000-04:00",
+          "external_charge_id": "01KN2Y8GZJV6MNBNPREK58YF7C",
+          "id": "151997745197-002",
+          "last_updated": "2026-03-31T17:54:40.000-04:00",
+          "metadata": {
+            "source": "proc-svc-charges",
+            "source_detail": "financed_advance_fee_charge"
+          },
+          "name": "financed_advance_fee",
+          "rate": 1,
+          "refund_charges": [],
+          "reserve_id": null,
+          "type": "fee",
+          "update_charges": []
+        }
+      ],
+      "charges_execution_info": {
+        "internal_execution": {
+          "date": "2026-03-31T17:54:40.766-04:00",
+          "execution_id": "01KN2Y8GYJFWD4NP42RDPT835P"
+        }
+      },
+      "collector_id": 323913758,
+      "corporation_id": null,
+      "counter_currency": null,
+      "coupon_amount": 0,
+      "currency_id": "BRL",
+      "date_approved": null,
+      "date_created": "2026-03-31T17:54:40.000-04:00",
+      "date_last_updated": "2026-03-31T17:54:43.000-04:00",
+      "date_of_expiration": null,
+      "deduction_schema": null,
+      "description": "Assinatura Decornet - Profissional",
+      "differential_pricing_id": null,
+      "external_reference": null,
+      "fee_details": [],
+      "financing_group": null,
+      "id": 151997745197,
+      "installments": 1,
+      "integrator_id": null,
+      "issuer_id": "24",
+      "live_mode": true,
+      "marketplace_owner": null,
+      "merchant_account_id": null,
+      "merchant_number": null,
+      "metadata": {},
+      "money_release_date": null,
+      "money_release_schema": null,
+      "money_release_status": "released",
+      "notification_url": null,
+      "operation_type": "regular_payment",
+      "order": {},
+      "payer": {
+        "email": null,
+        "entity_type": null,
+        "first_name": null,
+        "id": "3306879748",
+        "identification": {
+          "number": null,
+          "type": null
+        },
+        "last_name": null,
+        "operator_id": null,
+        "phone": {
+          "number": null,
+          "extension": null,
+          "area_code": null
+        },
+        "type": null
+      },
+      "payment_method": {
+        "data": {
+          "routing_data": {
+            "merchant_account_id": "103"
+          }
+        },
+        "id": "master",
+        "issuer_id": "24",
+        "type": "credit_card"
+      },
+      "payment_method_id": "master",
+      "payment_type_id": "credit_card",
+      "platform_id": null,
+      "point_of_interaction": {
+        "application_data": {
+          "name": null,
+          "operating_system": null,
+          "version": null
+        },
+        "business_info": {
+          "branch": "Merchant Services",
+          "sub_unit": "recurring",
+          "unit": "online_payments"
+        },
+        "location": {
+          "source": "collector",
+          "state_id": "BR-PR"
+        },
+        "references": [
+          {
+            "id": "59881231bd0d4efbad0ec8311418cc90",
+            "type": "RECURRING_INVOICE"
+          },
+          {
+            "id": "323913758-12e1b3a0-fcd9-49d5-b0ae-3aa06a81558c",
+            "type": "PREFERENCE"
+          },
+          {
+            "id": "1bce03e6e9cd4cf4b1374d2c630c206d",
+            "type": "AUTOMATIC_PAYMENTS_ATTEMPT"
+          }
+        ],
+        "transaction_data": {
+          "billing_date": "2026-03-30",
+          "first_time_use": true,
+          "invoice_id": null,
+          "invoice_period": {
+            "period": 1,
+            "type": "monthly"
+          },
+          "payment_reference": null,
+          "plan_id": "f0056d1a503d4c91a749232acac95558",
+          "processor": null,
+          "subscription_id": "914c82d2da8149ebbfd65b03b215d8b9",
+          "subscription_sequence": {
+            "number": 1,
+            "total": null
+          },
+          "user_present": true
+        },
+        "type": "SUBSCRIPTIONS"
+      },
+      "pos_id": null,
+      "processing_mode": "aggregator",
+      "refunds": [],
+      "release_info": null,
+      "shipping_amount": 0,
+      "sponsor_id": null,
+      "statement_descriptor": null,
+      "status": "rejected",
+      "status_detail": "cc_rejected_high_risk",
+      "store_id": null,
+      "tags": null,
+      "taxes_amount": 0,
+      "transaction_amount": 10,
+      "transaction_amount_refunded": 0,
+      "transaction_details": {
+        "acquirer_reference": null,
+        "external_resource_url": null,
+        "financial_institution": null,
+        "installment_amount": 10,
+        "net_received_amount": 0,
+        "overpaid_amount": 0,
+        "payable_deferral_period": null,
+        "payment_method_reference_id": null,
+        "total_paid_amount": 10
+      },
+      "shipping_cost": 0
+    }
+  ],
+  "paging": {
+    "total": 63,
+    "offset": 0,
+    "limit": 3
+  }
+}

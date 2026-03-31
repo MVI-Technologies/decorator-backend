@@ -24,7 +24,7 @@ export class SubscriptionsService {
     if (!feeConfig) {
       // Valor default se não existir
       feeConfig = await this.prisma.systemConfig.create({
-        data: { key: CONFIG_PROFESSIONAL_MONTHLY_FEE, value: '21.90' },
+        data: { key: CONFIG_PROFESSIONAL_MONTHLY_FEE, value: '1.00' },
       });
     }
 
@@ -43,9 +43,12 @@ export class SubscriptionsService {
 
     if (!profile) throw new NotFoundException('Perfil não encontrado');
 
+    const config = await this.getSubscriptionConfig();
+
     return {
       status: (profile as any).subscriptionStatus,
       expiresAt: (profile as any).subscriptionExpiresAt,
+      monthlyFee: config.monthlyFee,
     };
   }
 
