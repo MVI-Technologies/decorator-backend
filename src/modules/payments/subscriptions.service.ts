@@ -116,24 +116,33 @@ export class SubscriptionsService {
       
       const planId = (subscription as any).preapproval_plan_id;
       if (!profileId && planId) {
+        this.logger.log(`Assinatura sem external_reference, buscando profile pelo planId: ${planId}`);
         const profileByPlan = await this.prisma.professionalProfile.findFirst({
           where: { mpPreapprovalPlanId: planId } as any,
         });
-        if (profileByPlan) profileId = profileByPlan.id;
+        if (profileByPlan) {
+          profileId = profileByPlan.id;
+          this.logger.log(`Profile ${profileId} encontrado pelo planId ${planId}`);
+        }
       }
 
       if (!profileId) {
-        this.logger.warn(`Assinatura ${subscriptionId} do plano ${planId} sem profissional associado.`);
+        this.logger.warn(`Assinatura ${subscriptionId} do plano ${planId} ignorada: sem profissional associado.`);
         return;
       }
 
       const profile = await this.prisma.professionalProfile.findUnique({
-        where: { id: profileId },
+        where: { id: profileId as string },
       });
 
-      if (!profile) return;
+      if (!profile) {
+        this.logger.warn(`Profissional com ID ${profileId} não encontrado na base de dados (Assinatura ${subscriptionId}).`);
+        return;
+      }
 
-      if (subscription.status === 'authorized') {
+      const subStatus = subscription.status;
+
+      if (subStatus === 'authorized') {
         // Atualiza para ACTIVE com expiração em 1 mês (ou o Mercado Pago controla e manda novo webhook).
         // A data de expiração pode ser calculada com base no recurring date
         const expDate = new Date();
@@ -148,12 +157,12 @@ export class SubscriptionsService {
           } as any,
         });
         
-        this.logger.log(`Assinatura ativa para ${profileId}`);
-      } else if (subscription.status === 'cancelled' || subscription.status === 'past_due') {
+        this.logger.log(`Sucesso: Assinatura renovada/ativa para o profissional ${profileId}. Expira em: ${expDate.toISOString()}`);
+      } else if (subStatus === 'cancelled' || subStatus === 'past_due') {
         await this.prisma.professionalProfile.update({
           where: { id: profileId },
           data: {
-            subscriptionStatus: subscription.status === 'cancelled' ? 'CANCELED' : 'PAST_DUE',
+            subscriptionStatus: subStatus === 'cancelled' ? 'CANCELED' : 'PAST_DUE',
           } as any,
         });
       }
