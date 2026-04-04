@@ -21,6 +21,7 @@ import {
 import { PaymentsService } from './payments.service';
 import { MercadoPagoService } from './mercadopago.service';
 import { MercadoPagoWebhookDto, RequestWithdrawalDto } from './dto';
+import { SubscriptionsService } from './subscriptions.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
@@ -41,6 +42,7 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly mercadoPagoService: MercadoPagoService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   /**
@@ -126,16 +128,23 @@ export class PaymentsController {
       throw new UnauthorizedException('Assinatura do webhook inválida');
     }
 
-    // 2. Processar apenas eventos de pagamento
-    if (body.type !== 'payment') {
-      this.logger.log(`Webhook MP ignorado: tipo=${body.type}`);
+    // 2. Processar eventos de pagamento
+    if (body.type === 'payment' || body.topic === 'payment') {
+      this.logger.log(`Webhook MP recebido: action=${body.action} paymentId=${body.data?.id}`);
+      await this.paymentsService.handleMercadoPagoPayment(body.data?.id);
       return { received: true };
     }
 
-    // 3. Processar o pagamento de forma assíncrona
-    this.logger.log(`Webhook MP recebido: action=${body.action} paymentId=${body.data?.id}`);
-    await this.paymentsService.handleMercadoPagoPayment(body.data.id);
+    // 3. Processar eventos de assinatura
+    if (body.type === 'subscription_preapproval' || body.type === 'preapproval' || body.topic === 'subscription_preapproval') {
+      this.logger.log(`Webhook MP Subscriptions recebido no webhook geral: id=${body.data?.id}`);
+      if (body.data?.id) {
+        await this.subscriptionsService.handleSubscriptionWebhook(body.data.id);
+      }
+      return { received: true };
+    }
 
+    this.logger.log(`Webhook MP ignorado: tipo=${body.type} / topic=${body.topic}`);
     return { received: true };
   }
 }

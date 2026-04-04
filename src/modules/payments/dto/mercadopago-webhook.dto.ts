@@ -16,8 +16,13 @@ export class MercadoPagoWebhookDto {
 
   @ApiProperty({ example: 'payment' })
   @IsString()
-  @IsIn(['payment', 'merchant_order', 'plan', 'subscription'])
+  @IsIn(['payment', 'merchant_order', 'plan', 'subscription', 'subscription_preapproval', 'preapproval'])
   type: string;
+
+  @ApiPropertyOptional({ example: 'payment' })
+  @IsOptional()
+  @IsString()
+  topic?: string;
 
   @ApiProperty({ example: { id: '987654321' } })
   @IsObject()
