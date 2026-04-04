@@ -80,17 +80,24 @@ export class SubscriptionsService {
       // 1. Verificar configuração do valor
       const config = await this.getSubscriptionConfig();
 
-      // Sempre cria um novo plano para garantir init_point válido
-      const planResult = await this.mercadoPagoService.createSubscriptionPlan(config.monthlyFee);
-
-      // Persiste o planId mais recente no profile
-      await this.prisma.professionalProfile.update({
-        where: { id: profile.id },
-        data: { mpPreapprovalPlanId: planResult.planId } as any,
+      // Agora criamos uma preferência comum (para permitir usar PIX) em vez de plano de recorrência
+      const prefResult = await this.mercadoPagoService.createPreference({
+        projectId: profile.id, // Passamos o perfil no projectId
+        projectTitle: 'Mensalidade Decornet - Profissional',
+        clientName: user.name,
+        clientEmail: user.email,
+        price: config.monthlyFee,
+        isSubscription: true,
       });
 
-      this.logger.log(`[subscribe] Retornando checkoutUrl=${planResult.checkoutUrl}`);
-      return { checkoutUrl: planResult.checkoutUrl };
+      // Persiste o planId mais recente no profile (vamos usar para salvar a preference gerada)
+      await this.prisma.professionalProfile.update({
+        where: { id: profile.id },
+        data: { mpPreapprovalPlanId: prefResult.preferenceId } as any,
+      });
+
+      this.logger.log(`[subscribe] Retornando checkoutUrl=${prefResult.checkoutUrl} (Com suporte a PIX)`);
+      return { checkoutUrl: prefResult.checkoutUrl };
     } catch (err: any) {
       console.error('------- SUBSCRIBE GENERAL ERROR -------');
       console.error(err);

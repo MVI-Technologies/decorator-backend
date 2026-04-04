@@ -9,13 +9,14 @@ import MercadoPagoConfig, {
 import * as crypto from 'crypto';
 
 export interface CreatePreferenceParams {
-  projectId: string;
+  projectId: string; // Pode ser o ID do perfil no caso de assinatura
   projectTitle: string;
   price: number;
   clientName: string;
   clientEmail: string;
   clientPhone?: string;
   installmentsLimit?: number;
+  isSubscription?: boolean;
 }
 
 export interface PreferenceResult {
@@ -128,6 +129,7 @@ export class MercadoPagoService {
         // Metadados adicionais
         metadata: {
           project_id: projectId,
+          is_subscription: params.isSubscription ?? false,
         },
         // Identificação da plataforma
         statement_descriptor: 'DECORNET',

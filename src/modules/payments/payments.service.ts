@@ -219,6 +219,26 @@ export class PaymentsService {
       return;
     }
 
+    // Verificar se é uma assinatura (PIX ou Cartão mensalidade)
+    if (mpPayment.metadata?.is_subscription) {
+      if (mpPayment.status === 'approved') {
+        const profileId = projectId; // No caso de assinatura, mandamos o ID do perfil no projectId
+        const expDate = new Date();
+        expDate.setMonth(expDate.getMonth() + 1);
+        
+        await this.prisma.professionalProfile.update({
+          where: { id: profileId },
+          data: {
+            subscriptionStatus: 'ACTIVE',
+            subscriptionExpiresAt: expDate,
+            mpSubscriptionId: paymentId,
+          } as any,
+        });
+        this.logger.log(`Assinatura PIX/Única ativada para perfil ${profileId}`);
+      }
+      return;
+    }
+
     // 2. Buscar o projeto
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
