@@ -112,14 +112,15 @@ export class MercadoPagoService {
         },
         notification_url: notificationUrl,
         back_urls: {
+          // O MP automaticamente concatena query params (payment_id, status, collection_status etc.)
           success: params.isSubscription
-            ? `${this.frontendUrl}/app/configuracoes/assinatura?status=success&payment_id=PAYMENT_ID`
+            ? `${this.frontendUrl}/app/assinatura/retorno?origin=success`
             : `${this.frontendUrl}/app/projetos/${projectId}/pagamento/sucesso`,
           failure: params.isSubscription
-            ? `${this.frontendUrl}/app/configuracoes/assinatura?status=failure`
+            ? `${this.frontendUrl}/app/assinatura/retorno?origin=failure`
             : `${this.frontendUrl}/app/projetos/${projectId}/pagamento/falha`,
           pending: params.isSubscription
-            ? `${this.frontendUrl}/app/configuracoes/assinatura?status=pending`
+            ? `${this.frontendUrl}/app/assinatura/retorno?origin=pending`
             : `${this.frontendUrl}/app/projetos/${projectId}/pagamento/pendente`,
         },
         // Redirecionar automaticamente após aprovação
