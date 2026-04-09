@@ -40,7 +40,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, supabaseConfig, jwtConfig],
-      // Caminho absoluto para .env (evita P1001 quando cwd ≠ raiz do projeto)
+      // Caminho absoluto para .env (evita P1001 quando cwd ≠ raiz do projeto
       envFilePath: join(__dirname, '..', '.env'),
     }),
     ThrottlerModule.forRoot({
