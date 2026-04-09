@@ -130,8 +130,13 @@ export class PaymentsController {
 
     // 2. Processar eventos de pagamento
     if (body.type === 'payment' || body.topic === 'payment') {
-      this.logger.log(`Webhook MP recebido: action=${body.action} paymentId=${body.data?.id}`);
-      await this.paymentsService.handleMercadoPagoPayment(body.data?.id);
+      const paymentId = body.data?.id;
+      this.logger.log(`Webhook MP recebido: action=${body.action} paymentId=${paymentId}`);
+      if (paymentId) {
+        await this.paymentsService.handleMercadoPagoPayment(paymentId);
+      } else {
+        this.logger.warn('Webhook de payment recebido sem data.id — ignorado');
+      }
       return { received: true };
     }
 

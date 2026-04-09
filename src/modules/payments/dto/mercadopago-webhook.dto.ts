@@ -1,36 +1,42 @@
-import { IsString, IsObject, IsIn, IsOptional } from 'class-validator';
+import { IsString, IsObject, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * Payload enviado pelo Mercado Pago no webhook.
  * Referência: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
+ *
+ * NOTA: O campo `type` é intencionalmente permissivo (@IsOptional + @IsString)
+ * pois o Mercado Pago pode enviar tipos novos (ex: preapproval_payment,
+ * subscription_authorized) que não devem causar um 400 e impedir o processamento.
+ * A filtragem por tipo é feita manualmente dentro de cada handler.
  */
 export class MercadoPagoWebhookDto {
   @ApiProperty({ example: '123456789' })
   @IsString()
   id: string;
 
-  @ApiProperty({ example: 'payment.updated' })
+  @ApiPropertyOptional({ example: 'payment.updated' })
+  @IsOptional()
   @IsString()
-  action: string;
+  action?: string;
 
-  @ApiProperty({ example: 'payment' })
+  @ApiPropertyOptional({ example: 'payment' })
+  @IsOptional()
   @IsString()
-  @IsIn(['payment', 'merchant_order', 'plan', 'subscription', 'subscription_preapproval', 'preapproval'])
-  type: string;
+  type?: string;
 
   @ApiPropertyOptional({ example: 'payment' })
   @IsOptional()
   @IsString()
   topic?: string;
 
-  @ApiProperty({ example: { id: '987654321' } })
+  @ApiPropertyOptional({ example: { id: '987654321' } })
+  @IsOptional()
   @IsObject()
-  data: { id: string };
+  data?: { id: string };
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
   live_mode?: boolean;
 
   @ApiPropertyOptional()

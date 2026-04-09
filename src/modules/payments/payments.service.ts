@@ -220,12 +220,44 @@ export class PaymentsService {
     }
 
     // Verificar se é uma assinatura (PIX ou Cartão mensalidade)
-    if (mpPayment.metadata?.is_subscription) {
+    // Normaliza tanto boolean quanto string — o MP pode retornar qualquer um
+    const isSubscription =
+      mpPayment.metadata?.is_subscription === true ||
+      mpPayment.metadata?.is_subscription === 'true';
+
+    if (isSubscription) {
+      this.logger.log(
+        `[Webhook] Pagamento de assinatura detectado: paymentId=${paymentId} ` +
+          `status=${mpPayment.status} profileId=${projectId}`,
+      );
+
       if (mpPayment.status === 'approved') {
         const profileId = projectId; // No caso de assinatura, mandamos o ID do perfil no projectId
+
+        // Idempotência: evita reprocessar o mesmo pagamento aprovado
+        const currentProfile = await this.prisma.professionalProfile.findUnique({
+          where: { id: profileId },
+        });
+
+        if (!currentProfile) {
+          this.logger.warn(`[Webhook] Perfil não encontrado para ativação: profileId=${profileId}`);
+          return;
+        }
+
+        if (
+          (currentProfile as any).mpSubscriptionId === paymentId &&
+          (currentProfile as any).subscriptionStatus === 'ACTIVE'
+        ) {
+          this.logger.log(
+            `[Webhook] Idempotência: assinatura já ativa para paymentId=${paymentId} — ignorando`,
+          );
+          return;
+        }
+
         const expDate = new Date();
         expDate.setMonth(expDate.getMonth() + 1);
-        
+
+        // Relança o erro para que o MP reenvie o webhook em caso de falha no DB
         await this.prisma.professionalProfile.update({
           where: { id: profileId },
           data: {
@@ -234,8 +266,17 @@ export class PaymentsService {
             mpSubscriptionId: paymentId,
           } as any,
         });
-        this.logger.log(`Assinatura PIX/Única ativada para perfil ${profileId}`);
+
+        this.logger.log(
+          `✅ [Webhook] Assinatura ativada: profileId=${profileId} expires=${expDate.toISOString()}`,
+        );
+      } else {
+        this.logger.warn(
+          `[Webhook] Pagamento de assinatura com status não aprovado: ` +
+            `status=${mpPayment.status} paymentId=${paymentId} — sem ação de ativação`,
+        );
       }
+
       return;
     }
 

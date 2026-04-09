@@ -84,6 +84,7 @@ model ProfessionalProfile {
   projects              Project[]                      @relation("ProfessionalProjects")
   proposals             Proposal[]
   withdrawals           Withdrawal[]
+  subscriptionEvents    SubscriptionEvent[]
 
   @@map("professional_profiles")
 }
@@ -324,6 +325,29 @@ model SystemConfig {
   @@map("system_config")
 }
 
+/// Registro de auditoria de eventos do ciclo de assinatura.
+/// Permite depurar falhas no fluxo de webhook sem depender só de logs.
+model SubscriptionEvent {
+  id            String              @id @default(uuid())
+  profileId     String              @map("profile_id")
+  /// Tipo do evento: webhook.received, activated, verify_payment, failed, status_changed
+  eventType     String              @map("event_type")
+  /// ID do pagamento ou assinatura no Mercado Pago
+  mpEventId     String?             @map("mp_event_id")
+  /// Status retornado pelo MP (approved, authorized, cancelled, etc.)
+  mpStatus      String?             @map("mp_status")
+  /// Payload completo do webhook ou resposta da API (para depuração)
+  payload       Json?
+  /// Mensagem de erro caso o evento tenha falhado
+  errorMessage  String?             @map("error_message")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  profile       ProfessionalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([createdAt])
+  @@map("subscription_events")
+}
+
 /// Roles do sistema
 enum Role {
   CLIENT
@@ -395,6 +419,7 @@ enum NotificationType {
   REVIEW
   ADMIN
   SYSTEM
+  SUBSCRIPTION
 }
 
 /// Status da proposta (profissional → cliente)

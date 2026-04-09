@@ -112,9 +112,15 @@ export class MercadoPagoService {
         },
         notification_url: notificationUrl,
         back_urls: {
-          success: `${this.frontendUrl}/app/projetos/${projectId}/pagamento/sucesso`,
-          failure: `${this.frontendUrl}/app/projetos/${projectId}/pagamento/falha`,
-          pending: `${this.frontendUrl}/app/projetos/${projectId}/pagamento/pendente`,
+          success: params.isSubscription
+            ? `${this.frontendUrl}/app/configuracoes/assinatura?status=success&payment_id=PAYMENT_ID`
+            : `${this.frontendUrl}/app/projetos/${projectId}/pagamento/sucesso`,
+          failure: params.isSubscription
+            ? `${this.frontendUrl}/app/configuracoes/assinatura?status=failure`
+            : `${this.frontendUrl}/app/projetos/${projectId}/pagamento/falha`,
+          pending: params.isSubscription
+            ? `${this.frontendUrl}/app/configuracoes/assinatura?status=pending`
+            : `${this.frontendUrl}/app/projetos/${projectId}/pagamento/pendente`,
         },
         // Redirecionar automaticamente após aprovação
         auto_return: 'approved',

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from './mercadopago.service';
 
@@ -116,69 +116,205 @@ export class SubscriptionsService {
    * Processa webhook de "subscription_preapproval"
    */
   async handleSubscriptionWebhook(subscriptionId: string) {
-    this.logger.log(`Processando Webhook de Assinatura: ${subscriptionId}`);
+    this.logger.log(`[SubscriptionWebhook] Início: subscriptionId=${subscriptionId}`);
 
+    let subscription: any;
     try {
-      const subscription = await this.mercadoPagoService.getSubscription(subscriptionId);
+      subscription = await this.mercadoPagoService.getSubscription(subscriptionId);
+    } catch (err) {
+      this.logger.error(`[SubscriptionWebhook] Falha ao consultar MP: subscriptionId=${subscriptionId}`, err);
+      // Relança para que o MP reenvia o webhook (não retorna 200 silenciosamente)
+      throw new InternalServerErrorException('Falha ao consultar status da assinatura no Mercado Pago');
+    }
 
-      // subscription.payer_id, subscription.status, subscription.external_reference
-      let profileId = subscription.external_reference;
-      
-      const planId = (subscription as any).preapproval_plan_id;
-      if (!profileId && planId) {
-        this.logger.log(`Assinatura sem external_reference, buscando profile pelo planId: ${planId}`);
-        const profileByPlan = await this.prisma.professionalProfile.findFirst({
-          where: { mpPreapprovalPlanId: planId } as any,
-        });
-        if (profileByPlan) {
-          profileId = profileByPlan.id;
-          this.logger.log(`Profile ${profileId} encontrado pelo planId ${planId}`);
-        }
+    this.logger.log(
+      `[SubscriptionWebhook] MP retornou: status=${subscription.status} ` +
+        `external_reference=${subscription.external_reference} ` +
+        `preapproval_plan_id=${(subscription as any).preapproval_plan_id}`,
+    );
+
+    // 1. Tentar correlacionar pelo external_reference (forma correta)
+    let profileId: string | undefined | null = subscription.external_reference;
+
+    // 2. Fallback: buscar pelo mpPreapprovalPlanId (salvo na criação do plano)
+    const planId = (subscription as any).preapproval_plan_id;
+    if (!profileId && planId) {
+      this.logger.log(
+        `[SubscriptionWebhook] Sem external_reference — fallback pelo planId=${planId}`,
+      );
+      const profileByPlan = await this.prisma.professionalProfile.findFirst({
+        where: { mpPreapprovalPlanId: planId } as any,
+      });
+      if (profileByPlan) {
+        profileId = profileByPlan.id;
+        this.logger.log(
+          `[SubscriptionWebhook] Perfil encontrado pelo planId: profileId=${profileId}`,
+        );
       }
+    }
 
-      if (!profileId) {
-        this.logger.warn(`Assinatura ${subscriptionId} do plano ${planId} ignorada: sem profissional associado.`);
+    if (!profileId) {
+      this.logger.error(
+        `[SubscriptionWebhook] ❌ Nenhum profissional associado à assinatura ${subscriptionId} ` +
+          `(planId=${planId}). Verifique se external_reference está sendo enviado na criação.`,
+      );
+      // Lança erro para o MP reenviar — NÃO retorna 200 silenciosamente (BUG original)
+      throw new InternalServerErrorException(
+        `Assinatura ${subscriptionId} sem profissional associado — não é possível processar`,
+      );
+    }
+
+    const profile = await this.prisma.professionalProfile.findUnique({
+      where: { id: profileId as string },
+    });
+
+    if (!profile) {
+      this.logger.error(
+        `[SubscriptionWebhook] Perfil ${profileId} não existe no banco (subscriptionId=${subscriptionId})`,
+      );
+      return; // Perfil deletado — não há o que fazer, aceitar silenciosamente
+    }
+
+    const subStatus = subscription.status;
+    this.logger.log(`[SubscriptionWebhook] Processando status=${subStatus} para profileId=${profileId}`);
+
+    if (subStatus === 'authorized' || subStatus === 'active') {
+      // Idempotência
+      if (
+        (profile as any).mpSubscriptionId === subscriptionId &&
+        (profile as any).subscriptionStatus === 'ACTIVE'
+      ) {
+        this.logger.log(
+          `[SubscriptionWebhook] Idempotência: assinatura já ativa subscriptionId=${subscriptionId}`,
+        );
         return;
       }
 
-      const profile = await this.prisma.professionalProfile.findUnique({
-        where: { id: profileId as string },
+      const expDate = new Date();
+      expDate.setMonth(expDate.getMonth() + 1);
+
+      await this.prisma.professionalProfile.update({
+        where: { id: profileId },
+        data: {
+          subscriptionStatus: 'ACTIVE',
+          subscriptionExpiresAt: expDate,
+          mpSubscriptionId: subscriptionId,
+        } as any,
       });
 
-      if (!profile) {
-        this.logger.warn(`Profissional com ID ${profileId} não encontrado na base de dados (Assinatura ${subscriptionId}).`);
-        return;
-      }
-
-      const subStatus = subscription.status;
-
-      if (subStatus === 'authorized') {
-        // Atualiza para ACTIVE com expiração em 1 mês (ou o Mercado Pago controla e manda novo webhook).
-        // A data de expiração pode ser calculada com base no recurring date
-        const expDate = new Date();
-        expDate.setMonth(expDate.getMonth() + 1);
-
-        await this.prisma.professionalProfile.update({
-          where: { id: profileId },
-          data: {
-            subscriptionStatus: 'ACTIVE',
-            subscriptionExpiresAt: expDate,
-            mpSubscriptionId: subscriptionId,
-          } as any,
-        });
-        
-        this.logger.log(`Sucesso: Assinatura renovada/ativa para o profissional ${profileId}. Expira em: ${expDate.toISOString()}`);
-      } else if (subStatus === 'cancelled' || subStatus === 'past_due') {
-        await this.prisma.professionalProfile.update({
-          where: { id: profileId },
-          data: {
-            subscriptionStatus: subStatus === 'cancelled' ? 'CANCELED' : 'PAST_DUE',
-          } as any,
-        });
-      }
-
-    } catch (err) {
-      this.logger.error(`Erro ao processar assinatura ${subscriptionId}`, err);
+      this.logger.log(
+        `✅ [SubscriptionWebhook] Assinatura ativada: profileId=${profileId} expires=${expDate.toISOString()}`,
+      );
+    } else if (subStatus === 'cancelled' || subStatus === 'past_due') {
+      const newStatus = subStatus === 'cancelled' ? 'CANCELED' : 'PAST_DUE';
+      await this.prisma.professionalProfile.update({
+        where: { id: profileId },
+        data: { subscriptionStatus: newStatus } as any,
+      });
+      this.logger.log(
+        `[SubscriptionWebhook] Status atualizado para ${newStatus}: profileId=${profileId}`,
+      );
+    } else {
+      this.logger.log(
+        `[SubscriptionWebhook] Status ${subStatus} não requer ação: profileId=${profileId}`,
+      );
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Verificação Pós-Checkout (fallback para quando o webhook atrasa)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Chamado pelo frontend na página de retorno do checkout MP.
+   * Verifica diretamente na API do MP se o pagamento foi aprovado e ativa a
+   * assinatura imediatamente, sem depender do webhook ter chegado antes.
+   *
+   * Resolve condições de corrida onde o usuário retorna ao app antes
+   * do webhook ser processado.
+   */
+  async verifyAndActivateFromPayment(
+    userId: string,
+    paymentId: string,
+  ): Promise<{ activated: boolean; alreadyActive?: boolean; status?: string; expiresAt?: Date }> {
+    if (!paymentId) {
+      throw new BadRequestException('payment_id é obrigatório');
+    }
+
+    const profile = await this.prisma.professionalProfile.findUnique({
+      where: { userId },
+    });
+    if (!profile) throw new NotFoundException('Perfil não encontrado');
+
+    this.logger.log(
+      `[verifyAndActivate] Verificando paymentId=${paymentId} para userId=${userId}`,
+    );
+
+    let mpPayment: any;
+    try {
+      mpPayment = await this.mercadoPagoService.getPayment(paymentId);
+    } catch (err) {
+      this.logger.error(
+        `[verifyAndActivate] Erro ao consultar MP: paymentId=${paymentId}`,
+        err,
+      );
+      throw new BadRequestException(
+        'Não foi possível verificar o pagamento no Mercado Pago. Tente novamente.',
+      );
+    }
+
+    this.logger.log(
+      `[verifyAndActivate] MP status=${mpPayment.status} ` +
+        `metadata=${JSON.stringify(mpPayment.metadata)}`,
+    );
+
+    // Verificar se o pagamento pertence a uma assinatura
+    const isSubscription =
+      mpPayment.metadata?.is_subscription === true ||
+      mpPayment.metadata?.is_subscription === 'true';
+
+    if (!isSubscription) {
+      throw new BadRequestException(
+        'Este pagamento não corresponde a uma assinatura de mensalidade.',
+      );
+    }
+
+    // Status ainda pendente — só informa, não ativa
+    if (mpPayment.status !== 'approved') {
+      this.logger.log(
+        `[verifyAndActivate] Pagamento não aprovado: status=${mpPayment.status}`,
+      );
+      return { activated: false, status: mpPayment.status };
+    }
+
+    // Idempotência: se já está ativo com o mesmo paymentId, não precisa fazer nada
+    if (
+      (profile as any).mpSubscriptionId === paymentId &&
+      (profile as any).subscriptionStatus === 'ACTIVE'
+    ) {
+      this.logger.log(
+        `[verifyAndActivate] Assinatura já ativa para paymentId=${paymentId} (idempotência)`,
+      );
+      return { activated: true, alreadyActive: true };
+    }
+
+    const expDate = new Date();
+    expDate.setMonth(expDate.getMonth() + 1);
+
+    await this.prisma.professionalProfile.update({
+      where: { id: profile.id },
+      data: {
+        subscriptionStatus: 'ACTIVE',
+        subscriptionExpiresAt: expDate,
+        mpSubscriptionId: paymentId,
+      } as any,
+    });
+
+    this.logger.log(
+      `✅ [verifyAndActivate] Assinatura ativada via verify-payment: ` +
+        `userId=${userId} profileId=${profile.id} expires=${expDate.toISOString()}`,
+    );
+
+    return { activated: true, expiresAt: expDate };
   }
 }
