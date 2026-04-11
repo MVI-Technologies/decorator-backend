@@ -120,10 +120,23 @@ export class AuthService {
       // Buscar dados do usuário no banco
       const user = await this.prisma.user.findUnique({
         where: { supabaseAuthId: supabaseData.user.id },
+        include: { professionalProfile: true },
       });
 
       if (!user || !user.isActive) {
         throw new UnauthorizedException('Usuário não encontrado ou inativo');
+      }
+
+      // Check professional profile status
+      if (user.role === Role.PROFESSIONAL && user.professionalProfile) {
+        const { status } = user.professionalProfile;
+        if (status === 'PENDING_APPROVAL') {
+          throw new UnauthorizedException('Seu perfil do profissional está em análise. Aguarde aprovação.');
+        } else if (status === 'REJECTED') {
+          throw new UnauthorizedException('Seu perfil do profissional não foi aprovado.');
+        } else if (status === 'SUSPENDED') {
+          throw new UnauthorizedException('Seu perfil do profissional foi suspenso.');
+        }
       }
 
       this.logger.log(`Login: ${user.email}`);

@@ -899,7 +899,11 @@ export class ProjectsService {
       throw new BadRequestException('Profissional não encontrado ou aprovação pendente');
     }
 
-    if ((professional as any).subscriptionStatus !== 'ACTIVE') {
+    const subStatus = (professional as any).subscriptionStatus;
+    const expiresAt = (professional as any).subscriptionExpiresAt as Date | null;
+    const isExpired = expiresAt ? expiresAt < new Date() : false;
+
+    if (subStatus !== 'ACTIVE' || isExpired) {
       throw new BadRequestException(
         'Este profissional está com a mensalidade pendente e não pode aceitar novos projetos no momento.',
       );
