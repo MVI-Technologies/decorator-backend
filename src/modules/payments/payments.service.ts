@@ -49,7 +49,7 @@ export class PaymentsService {
     const withdrawalsResult = await this.prisma.withdrawal.aggregate({
       where: {
         professionalProfileId: profile.id,
-        status: { in: ['COMPLETED', 'PROCESSING'] },
+        status: { in: ['COMPLETED', 'PROCESSING', 'REQUESTED'] },
       },
       _sum: { amount: true },
     });
